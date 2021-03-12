@@ -60,8 +60,11 @@ length = struct.calcsize(format)
 # Transmit message continuously
 while True :
 
-    # Request for receiving new LoRa packet
-    LoRa.request()
+    # Set RF module to listen mode with 20 ms RX mode and 10 ms sleep
+    # Some LoRa packet will not be received if sleep period too long or preamble length too short
+    rxPeriod = 20
+    sleepPeriod = 10
+    LoRa.listen(rxPeriod, sleepPeriod)
     # Wait for incoming LoRa packet
     LoRa.wait()
 

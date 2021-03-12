@@ -581,6 +581,34 @@ class SX126x :
             else : self._status = self.STATUS_RX_DONE
             self._fixRxTimeout()
 
+    def listen(self, rxPeriod, sleepPeriod) :
+        self._irqSetup(self.IRQ_RX_DONE | self.IRQ_TIMEOUT | self.IRQ_HEADER_ERR | self.IRQ_CRC_ERR)
+        self._status = self.STATUS_RX_WAIT
+        rxPeriod = rxPeriod << 6
+        sleepPeriod = sleepPeriod << 6
+        if rxPeriod > 0x00FFFFFF : rxPeriod = 0x00FFFFFF
+        if sleepPeriod > 0x00FFFFFF : sleepPeriod = 0x00FFFFFF
+        if self._txen != -1 and self._rxen != -1 :
+            gpio.output(self._txen, gpio.LOW)
+            gpio.output(self._rxen, gpio.HIGH)
+        self._setRxDutyCycle(rxPeriod, sleepPeriod)
+        if self._irq != -1 :
+            self._statusInterrupt = self.STATUS_INT_INIT
+            try : gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=100)
+            except : pass
+        else :
+            irqStat = self._waitIrq()
+            payloadLengthRx = []; rxStartBufferPointer = []
+            self._getRxBufferStatus(payloadLengthRx, rxStartBufferPointer)
+            self._payloadTxRx = payloadLengthRx[0]
+            self._bufferIndex = rxStartBufferPointer[0]
+            if self._rxen != -1 : gpio.output(self._rxen, gpio.LOW)
+            if irqStat & self.IRQ_TIMEOUT : self._status = self.STATUS_RX_TIMEOUT
+            elif irqStat & self.IRQ_HEADER_ERR : self._status = self.STATUS_HEADER_ERR
+            elif irqStat & self.IRQ_CRC_ERR : self._status = self.STATUS_CRC_ERR
+            else : self._status = self.STATUS_RX_DONE
+            self._fixRxTimeout()
+
     def available(self) :
         return self._payloadTxRx
 
@@ -732,14 +760,15 @@ class SX126x :
         self._writeBytes(0x9F, [enable], 1)
 
     def _setRxDutyCycle(self, rxPeriod, sleepPeriod) :
-        buf = []
-        buf[0] = (rxPeriod >> 16) & 0xFF
-        buf[1] = (rxPeriod >> 8) & 0xFF
-        buf[2] = rxPeriod & 0xFF
-        buf[0] = (sleepPeriod >> 16) & 0xFF
-        buf[1] = (sleepPeriod >> 8) & 0xFF
-        buf[2] = sleepPeriod & 0xFF
-        self._writeBytes(0x82, buf, 6)
+        buf = [
+            (rxPeriod >> 16) & 0xFF,
+            (rxPeriod >> 8) & 0xFF,
+            rxPeriod & 0xFF,
+            (sleepPeriod >> 16) & 0xFF,
+            (sleepPeriod >> 8) & 0xFF,
+            sleepPeriod & 0xFF
+        ]
+        self._writeBytes(0x94, buf, 6)
 
     def _setCad(self) :
         self._writeBytes(0xC5, [], 0)
@@ -877,15 +906,16 @@ class SX126x :
         self._writeBytes(0x8B, buf, 8)
 
     def _setModulationParamsFsk(self, br, pulseShape, bandwidth, Fdev) :
-        buf = []
-        buf[0] = (br >> 16) & 0xFF
-        buf[1] = (br >> 8) & 0xFF
-        buf[2] = br & 0xFF
-        buf[3] = pulseShape
-        buf[4] = bandwidth
-        buf[5] = (br >> 16) & 0xFF
-        buf[6] = (br >> 8) & 0xFF
-        buf[7] = Fdev & 0xFF
+        buf = [
+            (br >> 16) & 0xFF,
+            (br >> 8) & 0xFF,
+            br & 0xFF,
+            pulseShape,
+            bandwidth,
+            (br >> 16) & 0xFF,
+            (br >> 8) & 0xFF,
+            Fdev & 0xFF
+        ]
         self._writeBytes(0x8B, buf, 8)
 
     def _setPacketParamsLoRa(self, preambleLength, headerType, payloadLength, crcType, invertIq) :
@@ -908,29 +938,31 @@ class SX126x :
         self._writeBytes(0x8C, buf, 9)
 
     def _setPacketParamsFsk(self, preambleLength, preambleDetector, syncWordLength, addrComp, packetType, payloadLength, crcType, whitening) :
-        buf = []
-        buf[0] = (preambleLength >> 8) & 0xFF
-        buf[1] = preambleLength & 0xFF
-        buf[2] = preambleDetector
-        buf[3] = syncWordLength
-        buf[4] = addrComp
-        buf[5] = packetType
-        buf[6] = payloadLength
-        buf[7] = crcType
-        buf[8] = whitening
+        buf = [
+            (preambleLength >> 8) & 0xFF,
+            preambleLength & 0xFF,
+            preambleDetector,
+            syncWordLength,
+            addrComp,
+            packetType,
+            payloadLength,
+            crcType,
+            whitening
+        ]
         self._writeBytes(0x8C, buf, 9)
 
     def _setCadParams(self, cadSymbolNum, cadDetPeak, cadDetMin, cadExitMode, cadTimeout) :
         if cadSymbolNum < 0 or cadSymbolNum > 4 : return
         if cadExitMode < 0 or cadExitMode > 1 : return
-        buf = []
-        buf[0] = cadSymbolNum
-        buf[1] = cadDetPeak
-        buf[2] = cadDetMin
-        buf[3] = cadExitMode
-        buf[4] = (cadTimeout >> 16) & 0xFF
-        buf[5] = (cadTimeout >> 8) & 0xFF
-        buf[6] = cadTimeout & 0xFF
+        buf = [
+            cadSymbolNum,
+            cadDetPeak,
+            cadDetMin,
+            cadExitMode,
+            (cadTimeout >> 16) & 0xFF,
+            (cadTimeout >> 8) & 0xFF,
+            cadTimeout & 0xFF
+        ]
         self._writeBytes(0x88, buf, 7)
 
     def _setBufferBaseAddress(self, txBaseAddress, rxBaseAddress) :
