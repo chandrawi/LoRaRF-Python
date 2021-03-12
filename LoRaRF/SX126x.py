@@ -354,6 +354,7 @@ class SX126x :
         self._setStandby(self.STANDBY_RC)
         if self.getMode() != self.STATUS_MODE_STDBY_RC : return False
         self._setPacketType(self.LORA_MODEM)
+        self._fixResistanceAntenna()
         return True
 
     def end(self) :
@@ -367,11 +368,12 @@ class SX126x :
         gpio.output(self._reset, gpio.HIGH)
         while gpio.input(self._busy) == gpio.HIGH : pass
 
-    def sleep(self, option) :
+    def sleep(self, option=SLEEP_WARM_START) :
         self._setStandby(self.STANDBY_RC)
 
     def wake(self) :
         self._setStandby(self.STANDBY_RC)
+        self._fixResistanceAntenna()
 
     def standby(self, option) :
         self._setStandby(option)
@@ -495,6 +497,7 @@ class SX126x :
         self._crcType = crcType
         self._invertIq = invertIq
         self._setPacketParamsLoRa(preambleLength, headerType, payloadLength, crcType, invertIq)
+        self._fixInvertedIq(invertIq)
 
     def setLoRaSyncWord(self, sw) :
         buf = [
@@ -510,6 +513,7 @@ class SX126x :
         if self._txen != -1 and self._rxen != -1 :
             gpio.output(self._txen, gpio.HIGH)
             gpio.output(self._rxen, gpio.LOW)
+        self._fixLoRaBw500(self._bw)
 
     def endPacket(self, timeout=TX_MODE_SINGLE) :
         self._setPacketParamsLoRa(self._preambleLen, self._headerType, self._payloadTxRx, self._crcType, self._invertIq)
@@ -528,8 +532,23 @@ class SX126x :
             if irqStat & self.IRQ_TIMEOUT : self._status = self.STATUS_TX_TIMEOUT
             else : self._status = self.STATUS_TX_DONE
 
-    def write(self, data, length = 1) :
+    def write(self, data, length=0) :
+        if type(data) is list or type(data) is tuple :
+            if length == 0 or length > len(data) : length = len(data)
+        elif type(data) is int or type(data) is float :
+            length = 1
+            data = [int(data)]
+        else : raise TypeError("input data must be list, tuple, integer or float")
         self._writeBuffer(self._bufferIndex, data, length)
+        self._bufferIndex = (self._bufferIndex + length) % 256
+        self._payloadTxRx += length
+
+    def put(self, data) :
+        if type(data) is bytes or type(data) is bytearray :
+            dataList = list(data)
+            length = len(dataList)
+        else : raise TypeError("input data must be bytes or bytearray")
+        self._writeBuffer(self._bufferIndex, dataList, length)
         self._bufferIndex = (self._bufferIndex + length) % 256
         self._payloadTxRx += length
 
@@ -551,28 +570,38 @@ class SX126x :
             except : pass
         else :
             irqStat = self._waitIrq()
-            plTxRx = []
-            bufIdx = []
-            self._getRxBufferStatus(plTxRx, bufIdx)
-            self._payloadTxRx = plTxRx[0]
-            self._bufferIndex = bufIdx[0]
+            payloadLengthRx = []; rxStartBufferPointer = []
+            self._getRxBufferStatus(payloadLengthRx, rxStartBufferPointer)
+            self._payloadTxRx = payloadLengthRx[0]
+            self._bufferIndex = rxStartBufferPointer[0]
             if self._rxen != -1 : gpio.output(self._rxen, gpio.LOW)
             if irqStat & self.IRQ_TIMEOUT : self._status = self.STATUS_RX_TIMEOUT
             elif irqStat & self.IRQ_HEADER_ERR : self._status = self.STATUS_HEADER_ERR
             elif irqStat & self.IRQ_CRC_ERR : self._status = self.STATUS_CRC_ERR
             else : self._status = self.STATUS_RX_DONE
+            self._fixRxTimeout()
 
     def available(self) :
         return self._payloadTxRx
 
-    def read(self, length=1) :
+    def read(self, length=0) :
+        single = False
+        if length == 0 : length = 1; single = True
         buf = []
         self._readBuffer(self._bufferIndex, buf, length)
         self._bufferIndex = (self._bufferIndex + length) % 256
         if self._payloadTxRx > length : self._payloadTxRx -= length
         else : self._payloadTxRx = 0
-        if length == 1 : return buf[0]
+        if single : return buf[0]
         else : return buf
+
+    def get(self, length=1) :
+        buf = []
+        self._readBuffer(self._bufferIndex, buf, length)
+        self._bufferIndex = (self._bufferIndex + length) % 256
+        if self._payloadTxRx > length : self._payloadTxRx -= length
+        else : self._payloadTxRx = 0
+        return bytes(buf)
 
     def flush(self) :
         self._bufferIndex += self._payloadTxRx
@@ -649,13 +678,13 @@ class SX126x :
         self._statusInterrupt = self.STATUS_INT_TX
 
     def _interruptRx(self, channel) :
-        plTxRx = []
-        bufIdx = []
-        self._getRxBufferStatus(plTxRx, bufIdx)
-        self._payloadTxRx = plTxRx[0]
-        self._bufferIndex = bufIdx[0]
+        payloadLengthRx = []; rxStartBufferPointer = []
+        self._getRxBufferStatus(payloadLengthRx, rxStartBufferPointer)
+        self._payloadTxRx = payloadLengthRx[0]
+        self._bufferIndex = rxStartBufferPointer[0]
         if self._rxen != -1 : gpio.output(self._rxen, gpio.LOW)
         self._statusInterrupt = self.STATUS_INT_RX
+        self._fixRxTimeout()
 
     def _getStatusInterrupt(self) :
         irqStat = []

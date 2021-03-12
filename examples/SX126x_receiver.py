@@ -1,3 +1,7 @@
+import os, sys
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
 from LoRaRF import SX126x
 from LoRaRF import LoRaIO
 import time
@@ -45,7 +49,7 @@ print("Set packet parameters:\n\tExplicit header type\n\tPreamble length = 12\n\
 LoRa.setLoRaSyncWord(0x3444)
 print("Set syncronize word to 0x3444")
 
-print("\n-- LORA RECEIVER --\n")
+print("\n-- LoRa Receiver --\n")
 
 # Receive message continuously
 while True :
@@ -69,5 +73,6 @@ while True :
     print("Packet status: RSSI = {0:0.2f} dBm | SNR = {1:0.2f} dB".format(LoRa.rssi(), LoRa.snr()))
 
     # Show received status in case CRC or header error occur
-    if LoRa.status() == LoRa.STATUS_CRC_ERR : print("CRC error")
-    if LoRa.status() == LoRa.STATUS_HEADER_ERR : print("Packet header error")
+    status = LoRa.status()
+    if status == LoRa.STATUS_CRC_ERR : print("CRC error")
+    if status == LoRa.STATUS_HEADER_ERR : print("Packet header error")

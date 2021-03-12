@@ -1,10 +1,12 @@
-# import os, sys
-# currentdir = os.path.dirname(os.path.realpath(__file__))
-# parentdir = os.path.dirname(currentdir)
-# sys.path.append(parentdir)
+import os, sys
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
 from LoRaRF import SX126x
 from LoRaRF import LoRaIO
 import time
+import struct
+import random
 
 # Begin LoRa radio and set NSS, reset, busy, IRQ, txen, and rxen pin with connected Raspberry Pi gpio pins
 # IRQ pin not used in this example (set to -1). Set txen and rxen pin to -1 if RF module doesn't have one
@@ -25,8 +27,8 @@ print("Set frequency to 915 Mhz")
 
 # Set TX power, default power for SX1262 and SX1268 are +22 dBm and for SX1261 is +14 dBm
 # This function will set PA config with optimal setting for requested TX power
-LoRa.setTxPower(LoRa.TX_POWER_SX1262_17)
-print("Set TX power to +17 dBm")
+LoRa.setTxPower(LoRa.TX_POWER_SX1262_22)
+print("Set TX power to +22 dBm")
 
 # Configure modulation parameter including spreading factor (SF), bandwidth (BW), and coding rate (CR)
 # Receiver must have same SF and BW setting with transmitter to be able to receive LoRa packet
@@ -39,41 +41,60 @@ print("Set modulation parameters:\n\tSpreading factor = 7\n\tBandwidth = 125 kHz
 # Configure packet parameter including header type, preamble length, payload length, and CRC type
 # The explicit packet includes header contain CR, number of byte, and CRC type
 # Receiver can receive packet with different CR and packet parameters in explicit header mode
-headerType = LoRa.LORA_HEADER_EXPLICIT
+headerType = LoRa.LORA_HEADER_IMPLICIT
 preambleLength = 12
-payloadLength = 15
+payloadLength = 12
 crcType = LoRa.LORA_CRC_ON
 LoRa.setLoRaPacket(headerType, preambleLength, payloadLength, crcType)
-print("Set packet parameters:\n\tExplicit header type\n\tPreamble length = 12\n\tPayload Length = 15\n\tCRC on")
+print(f"Set packet parameters:\n\tImplicit header type\n\tPreamble length = 12\n\tPayload Length = 12\n\tCRC on")
 
-# Set syncronize word for public network (0x3444)
-LoRa.setLoRaSyncWord(0x3444)
-print("Set syncronize word to 0x3444")
+# Set syncronize word for private network (0x1424)
+LoRa.setLoRaSyncWord(0x1424)
+print("Set syncronize word to 0x1424")
 
-print("\n-- LoRa Transmitter --\n")
+print("\n-- LoRa Node --\n")
 
-# Message to transmit
-message = "HeLoRa World!\0"
-messageList = list(message)
-for i in range(len(messageList)) : messageList[i] = ord(messageList[i])
-counter = 0
+# IDs and message format to transmit
+gatewayId = 0xCC
+nodeId = 0x77
+messageId = 0
+format = 'BBHIi'
+length = struct.calcsize(format)
 
 # Transmit message continuously
 while True :
 
-    # Transmit message and counter
-    # write() method must be placed between beginPacket() and endPacket()
+    # Structured message
+    structure = [
+        gatewayId,
+        nodeId,
+        messageId,
+        round(time.time()),
+        random.randrange(-1073741824, 1073741824)
+    ]
+    message = struct.pack(format, *structure)
+    messageId += 1
+
+    # Transmit structured message
+    # Set transmit timeout to 250 ms
     LoRa.beginPacket()
-    LoRa.write(messageList, len(messageList))
-    LoRa.write([counter], 1)
-    LoRa.endPacket()
+    LoRa.put(message)
+    LoRa.endPacket(250)
 
-    # Print message and counter
-    print(f"{message}  {counter}")
+    # Print structured message
+    print("Gateway ID    : 0x{0:02X}".format(gatewayId))
+    print("Node ID       : 0x{0:02X}".format(nodeId))
+    print(f"Message ID    : {structure[2]}")
+    print(f"Time          : {structure[3]}")
+    print(f"Data          : {structure[4]}")
 
-    # Print transmit time and data rate
-    print("Transmit time: {0:0.2f} ms | Data rate: {1:0.2f} byte/s".format(LoRa.transmitTime(), LoRa.dataRate()))
+    # Print transmit time
+    print("Transmit time : {0:0.2f} ms\n".format(LoRa.transmitTime()))
 
-    # Don't load RF module with continous transmit
+    # Print status timeout when transmit process terminated due to timeout
+    if LoRa.status() == LoRa.STATUS_TX_TIMEOUT : print("Transmit timeout")
+
+    # Put RF module to sleep in a few seconds
+    LoRa.sleep()
     time.sleep(5)
-    counter = counter + 1
+    LoRa.wake()

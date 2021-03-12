@@ -1,15 +1,16 @@
-# import os, sys
-# currentdir = os.path.dirname(os.path.realpath(__file__))
-# parentdir = os.path.dirname(currentdir)
-# sys.path.append(parentdir)
+import os, sys
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
 from LoRaRF import SX126x
 from LoRaRF import LoRaIO
 import time
+import struct
 
 # Begin LoRa radio and set NSS, reset, busy, IRQ, txen, and rxen pin with connected Raspberry Pi gpio pins
-# IRQ pin must connected to a Raspberry Pi gpio pin for continuous RX mode
+# IRQ pin not used in this example (set to -1). Set txen and rxen pin to -1 if RF module doesn't have one
 busId = 1; csId = 0
-board = LoRaIO.RPi_GPIO; resetPin = 22; busyPin = 23; irqPin = 24; txenPin = 26; rxenPin = 25
+board = LoRaIO.RPi_GPIO; resetPin = 22; busyPin = 23; irqPin = -1; txenPin = 26; rxenPin = 25
 LoRa = SX126x(busId, csId, LoRaIO.RPi_GPIO, resetPin, busyPin, irqPin, txenPin, rxenPin)
 print("Begin LoRa radio")
 if not LoRa.begin() :
@@ -38,42 +39,53 @@ print("Set modulation parameters:\n\tSpreading factor = 7\n\tBandwidth = 125 kHz
 # Configure packet parameter including header type, preamble length, payload length, and CRC type
 # The explicit packet includes header contain CR, number of byte, and CRC type
 # Receiver can receive packet with different CR and packet parameters in explicit header mode
-headerType = LoRa.LORA_HEADER_EXPLICIT
+headerType = LoRa.LORA_HEADER_IMPLICIT
 preambleLength = 12
-payloadLength = 15
+payloadLength = 12
 crcType = LoRa.LORA_CRC_ON
 LoRa.setLoRaPacket(headerType, preambleLength, payloadLength, crcType)
-print("Set packet parameters:\n\tExplicit header type\n\tPreamble length = 12\n\tPayload Length = 15\n\tCRC on")
+print(f"Set packet parameters:\n\tImplicit header type\n\tPreamble length = 12\n\tPayload Length = 12\n\tCRC on")
 
-# Set syncronize word for public network (0x3444)
-LoRa.setLoRaSyncWord(0x3444)
-print("Set syncronize word to 0x3444")
+# Set syncronize word for private network (0x1424)
+LoRa.setLoRaSyncWord(0x1424)
+print("Set syncronize word to 0x1424")
 
-print("\n-- LoRa Receiver Continuous --\n")
+print("\n-- LoRa Gateway --\n")
 
-# Request for receiving new LoRa packet in RX continuous mode
-LoRa.request(LoRa.RX_MODE_CONTINUOUS)
+# IDs and message format from received message
+gatewayId = 0xCC
+format = 'BBHIi'
+length = struct.calcsize(format)
 
-# Receive message continuously
+# Transmit message continuously
 while True :
 
+    # Request for receiving new LoRa packet
+    LoRa.request()
     # Wait for incoming LoRa packet
     LoRa.wait()
 
-    # Put received packet to message and counter variable
-    # read() and available() method must be called after request() or listen() method
-    length = LoRa.available() - 1
-    message = ""
-    # available() method return remaining received payload length and will decrement each read() or get() method called
-    while LoRa.available() > 1 :
-        message += chr(LoRa.read())
-    counter = LoRa.read()
+    # Get received structured message
+    message = LoRa.get(length)
+    structure = struct.unpack(format, message)
 
-    # Print received message and counter in serial
-    print(f"{message}  {counter}")
+    # Check gateway ID from received message
+    if structure[0] == gatewayId :
 
-    # Print packet/signal status including RSSI, SNR, and signalRSSI
-    print("Packet status: RSSI = {0:0.2f} dBm | SNR = {1:0.2f} dB".format(LoRa.rssi(), LoRa.snr()))
+        # Print structured message
+        print("Gateway ID    : 0x{0:02X}".format(gatewayId))
+        print("Node ID       : 0x{0:02X}".format(structure[1]))
+        print(f"Message ID    : {structure[2]}")
+        print(f"Time          : {structure[3]}")
+        print(f"Data          : {structure[4]}")
+
+        # Print packet status
+        print("Packet status : RSSI = {0:0.2f} dBm | SNR = {1:0.2f} dB\n".format(LoRa.rssi(), LoRa.snr()))
+
+    else :
+
+        # Print error message
+        print("Received message with wrong gateway ID (0x{0:02X})".format(structure[0]))
 
     # Show received status in case CRC or header error occur
     status = LoRa.status()
