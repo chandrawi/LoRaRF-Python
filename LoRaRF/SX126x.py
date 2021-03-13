@@ -301,7 +301,7 @@ class SX126x :
     _ldro = LORA_LDRO_OFF
     _headerType = LORA_HEADER_EXPLICIT
     _preambleLen = 12
-    _payLoadLen = 32
+    _payLoadLength = 32
     _crcType = LORA_CRC_ON
     _invertIq = LORA_IQ_STANDARD
 
@@ -498,6 +498,11 @@ class SX126x :
         self._invertIq = invertIq
         self._setPacketParamsLoRa(preambleLength, headerType, payloadLength, crcType, invertIq)
         self._fixInvertedIq(invertIq)
+
+    def setLoRaPayloadLength(self, payloadLength) :
+        self._payloadLength
+        self._setPacketParamsLoRa(self._preambleLength, self._headerType, payloadLength, self._crcType, self._invertIq)
+        self._fixInvertedIq(self._invertIq)
 
     def setLoRaSyncWord(self, sw) :
         buf = [
