@@ -9,7 +9,7 @@ import time
 # Begin LoRa radio and set NSS, reset, busy, IRQ, txen, and rxen pin with connected Raspberry Pi gpio pins
 # IRQ pin must connected to a Raspberry Pi gpio pin for continuous RX mode
 busId = 1; csId = 0
-board = LoRaIO.RPi_GPIO; resetPin = 22; busyPin = 23; irqPin = 24; txenPin = 26; rxenPin = 25
+board = LoRaIO.RPi_GPIO; resetPin = 22; busyPin = 23; irqPin = 24; txenPin = 5; rxenPin = 25
 LoRa = SX126x(busId, csId, LoRaIO.RPi_GPIO, resetPin, busyPin, irqPin, txenPin, rxenPin)
 print("Begin LoRa radio")
 if not LoRa.begin() :

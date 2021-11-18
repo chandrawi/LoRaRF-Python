@@ -291,6 +291,7 @@ class SX126x :
     _irq = -1
     _txen = -1
     _rxen = -1
+    _busyTimeout = 5000
 
     # LoRa setting
     _int = 1
@@ -347,6 +348,12 @@ class SX126x :
         if txen != -1 : gpio.setup(txen, gpio.OUT)
         if rxen != -1 : gpio.setup(rxen, gpio.OUT)
 
+    def busyCheck(self, timeout = _busyTimeout) :
+        t = time.time()
+        while gpio.input(self._busy) == gpio.HIGH :
+            if time.time() - t > timeout / 1000 : return True
+        return False
+
     def begin(self) :
         self.setSpi(self._bus, self._cs)
         self.setPins(self._gpio, self._reset, self._busy, self._irq, self._txen, self._rxen)
@@ -366,7 +373,7 @@ class SX126x :
         gpio.output(self._reset, gpio.LOW)
         time.sleep(0.001)
         gpio.output(self._reset, gpio.HIGH)
-        while gpio.input(self._busy) == gpio.HIGH : pass
+        return not self.busyCheck()
 
     def sleep(self, option=SLEEP_WARM_START) :
         self._setStandby(self.STANDBY_RC)
@@ -531,7 +538,7 @@ class SX126x :
             self._statusInterrupt = self.STATUS_INT_INIT
             gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptTx, bouncetime=100)
         else :
-            irqStat = self._waitIrq()
+            irqStat = self._waitIrq(timeout)
             self._transmitTime = time.time() - self._transmitTime
             if self._txen != -1 : gpio.output(self._txen, gpio.LOW)
             if irqStat & self.IRQ_TIMEOUT : self._status = self.STATUS_TX_TIMEOUT
@@ -574,7 +581,7 @@ class SX126x :
             try : gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=100)
             except : pass
         else :
-            irqStat = self._waitIrq()
+            irqStat = self._waitIrq(timeout)
             payloadLengthRx = []; rxStartBufferPointer = []
             self._getRxBufferStatus(payloadLengthRx, rxStartBufferPointer)
             self._payloadTxRx = payloadLengthRx[0]
@@ -589,6 +596,7 @@ class SX126x :
     def listen(self, rxPeriod, sleepPeriod) :
         self._irqSetup(self.IRQ_RX_DONE | self.IRQ_TIMEOUT | self.IRQ_HEADER_ERR | self.IRQ_CRC_ERR)
         self._status = self.STATUS_RX_WAIT
+        timeout = rxPeriod
         rxPeriod = rxPeriod << 6
         sleepPeriod = sleepPeriod << 6
         if rxPeriod > 0x00FFFFFF : rxPeriod = 0x00FFFFFF
@@ -602,7 +610,7 @@ class SX126x :
             try : gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=100)
             except : pass
         else :
-            irqStat = self._waitIrq()
+            irqStat = self._waitIrq(timeout)
             payloadLengthRx = []; rxStartBufferPointer = []
             self._getRxBufferStatus(payloadLengthRx, rxStartBufferPointer)
             self._payloadTxRx = payloadLengthRx[0]
@@ -645,10 +653,11 @@ class SX126x :
         if self._irq == -1 : return self._status
         else : return self._getStatusInterrupt()
 
-    def wait(self) :
+    def wait(self, timeout = 0) :
         if self._irq == -1 : return
+        t = time.time()
         while self._getStatusInterrupt() == self._status :
-            if self._statusInterrupt != self.STATUS_INT_INIT : break
+            if self._statusInterrupt != self.STATUS_INT_INIT or (time.time() - t > timeout / 1000 and timeout != 0) : break
         if self._status == self.STATUS_RX_CONTINUOUS_WAIT :
             self._statusRxContinuous = self._getStatusInterrupt()
             self._statusInterrupt = self.STATUS_INT_INIT
@@ -698,11 +707,13 @@ class SX126x :
         else : dio1Mask = irqMask
         self._setDioIrqParams(irqMask, dio1Mask, dio2Mask, dio3Mask)
 
-    def _waitIrq(self) :
+    def _waitIrq(self, timeout = 0) :
         irqStat = [0x0000]
+        t = time.time()
         while irqStat[0] == 0x0000 :
             irqStat.pop(0)
             self._getIrqStatus(irqStat)
+            if time.time() - t > timeout / 1000 and timeout != 0 : break
         return irqStat[0]
 
     def _interruptTx(self, channel) :
@@ -1060,13 +1071,13 @@ class SX126x :
         self._writeRegister(self.REG_IQ_POLARITY_SETUP, value, 1)
 
     def _writeBytes(self, opCode, data, nBytes) :
-        while gpio.input(self._busy) == gpio.HIGH : pass
+        if self.busyCheck() : return
         buf = [opCode]
         for i in range(nBytes) : buf.append(data[i])
         spi.xfer2(buf)
 
     def _readBytes(self, opCode, data, nBytes, address = [], nAddress = 0) :
-        while gpio.input(self._busy) == gpio.HIGH : pass
+        if self.busyCheck() : return
         buf = [opCode]
         for i in range(nAddress) : buf.append(address[i])
         for i in range(nBytes) : buf.append(0x00)

@@ -7,7 +7,7 @@ from LoRaRF import LoRaIO
 import time
 
 busId = 1; csId = 0
-board = LoRaIO.RPi_GPIO; resetPin = 22; busyPin = 23; irqPin = 24; txenPin = 26; rxenPin = 25
+board = LoRaIO.RPi_GPIO; resetPin = 22; busyPin = 23; irqPin = 24; txenPin = 5; rxenPin = 25
 
 LoRa = SX126x(busId, csId, LoRaIO.RPi_GPIO, resetPin, busyPin)
 GPIO = LoRaIO.LoRaIO(LoRaIO.DEF_GPIO).GPIO
