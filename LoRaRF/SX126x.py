@@ -536,6 +536,7 @@ class SX126x :
         self._transmitTime = time.time()
         if self._irq != -1 :
             self._statusInterrupt = self.STATUS_INT_INIT
+            gpio.remove_event_detect(self._irq)
             gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptTx, bouncetime=100)
         else :
             irqStat = self._waitIrq(timeout)
@@ -578,8 +579,8 @@ class SX126x :
         self._setRx(rxTimeout)
         if self._irq != -1 :
             self._statusInterrupt = self.STATUS_INT_INIT
-            try : gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=100)
-            except : pass
+            gpio.remove_event_detect(self._irq)
+            gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=100)
         else :
             irqStat = self._waitIrq(timeout)
             payloadLengthRx = []; rxStartBufferPointer = []
@@ -607,8 +608,8 @@ class SX126x :
         self._setRxDutyCycle(rxPeriod, sleepPeriod)
         if self._irq != -1 :
             self._statusInterrupt = self.STATUS_INT_INIT
-            try : gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=100)
-            except : pass
+            gpio.remove_event_detect(self._irq)
+            gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=100)
         else :
             irqStat = self._waitIrq(timeout)
             payloadLengthRx = []; rxStartBufferPointer = []
