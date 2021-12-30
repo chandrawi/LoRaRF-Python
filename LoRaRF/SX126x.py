@@ -336,10 +336,7 @@ class SX126x :
         self.setRxTxFallbackMode(fallbackMode)
 
     def getMode(self) :
-        mode = []
-        self.getStatus(mode)
-        if len(mode) > 0 : return mode[0] & 0x70
-        else : return 0x00
+        return self.getStatus() & 0x70
 
 ### HARDWARE CONFIGURATION METHODS ###
 
@@ -381,7 +378,7 @@ class SX126x :
 
     def setXtalCap(self, xtalA, xtalB) :
         self.setStandby(self.STANDBY_XOSC)
-        self.writeRegister(self.REG_XTA_TRIM, [xtalA, xtalB], 2)
+        self.writeRegister(self.REG_XTA_TRIM, (xtalA, xtalB), 2)
         self.setStandby(self.STANDBY_RC)
         self.calibrate(0xFF)
 
@@ -389,7 +386,7 @@ class SX126x :
         self.setRegulatorMode(regMode)
 
     def setCurrentProtection(self, level) :
-        self.writeRegister(self.REG_OCP_CONFIGURATION, [level], 1)
+        self.writeRegister(self.REG_OCP_CONFIGURATION, (level,), 1)
 
 ### MODEM, MODULATION PARAMETER, AND PACKET PARAMETER SETUP METHODS ###
 
@@ -475,10 +472,10 @@ class SX126x :
         if rxGain == self.RX_GAIN_BOOSTED :
             gain = self.BOOSTED_GAIN
             # set certain register to retain configuration after wake from sleep mode
-            self.writeRegister(self.REG_RX_GAIN, [gain], 1)
-            self.writeRegister(0x029F, [0x01, 0x08, 0xAC], 3)
+            self.writeRegister(self.REG_RX_GAIN, (gain,), 1)
+            self.writeRegister(0x029F, (0x01, 0x08, 0xAC), 3)
         else :
-            self.writeRegister(self.REG_RX_GAIN, [gain], 1)
+            self.writeRegister(self.REG_RX_GAIN, (gain,), 1)
 
     def setLoRaModulation(self, sf, bw, cr, ldro = 0) :
         self._sf = sf
@@ -502,10 +499,10 @@ class SX126x :
         self._fixInvertedIq(self._invertIq)
 
     def setLoRaSyncWord(self, sw) :
-        buf = [
+        buf = (
             (sw >> 8) & 0xFF,
             sw & 0xFF
-        ]
+        )
         self.writeRegister(self.REG_LORA_SYNC_WORD_MSB, buf, 2)
 
 ### TRANSMIT RELATED METHODS ###
@@ -542,7 +539,7 @@ class SX126x :
             if length == 0 or length > len(data) : length = len(data)
         elif type(data) is int or type(data) is float :
             length = 1
-            data = [int(data)]
+            data = (int(data),)
         else : raise TypeError("input data must be list, tuple, integer or float")
         self.writeBuffer(self._bufferIndex, data, length)
         self._bufferIndex = (self._bufferIndex + length) % 256
@@ -550,7 +547,7 @@ class SX126x :
 
     def put(self, data) :
         if type(data) is bytes or type(data) is bytearray :
-            dataList = list(data)
+            dataList = tuple(data)
             length = len(dataList)
         else : raise TypeError("input data must be bytes or bytearray")
         self.writeBuffer(self._bufferIndex, dataList, length)
@@ -577,10 +574,7 @@ class SX126x :
             gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=100)
         else :
             irqStat = self._waitIrq(timeout)
-            payloadLengthRx = []; rxStartBufferPointer = []
-            self.getRxBufferStatus(payloadLengthRx, rxStartBufferPointer)
-            self._payloadTxRx = payloadLengthRx[0]
-            self._bufferIndex = rxStartBufferPointer[0]
+            (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
             if self._rxen != -1 : gpio.output(self._rxen, gpio.LOW)
             if irqStat & self.IRQ_TIMEOUT : self._status = self.STATUS_RX_TIMEOUT
             elif irqStat & self.IRQ_HEADER_ERR : self._status = self.STATUS_HEADER_ERR
@@ -606,10 +600,7 @@ class SX126x :
             gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=100)
         else :
             irqStat = self._waitIrq(timeout)
-            payloadLengthRx = []; rxStartBufferPointer = []
-            self.getRxBufferStatus(payloadLengthRx, rxStartBufferPointer)
-            self._payloadTxRx = payloadLengthRx[0]
-            self._bufferIndex = rxStartBufferPointer[0]
+            (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
             if self._rxen != -1 : gpio.output(self._rxen, gpio.LOW)
             if irqStat & self.IRQ_TIMEOUT : self._status = self.STATUS_RX_TIMEOUT
             elif irqStat & self.IRQ_HEADER_ERR : self._status = self.STATUS_HEADER_ERR
@@ -623,8 +614,7 @@ class SX126x :
     def read(self, length = 0) :
         single = False
         if length == 0 : length = 1; single = True
-        buf = []
-        self.readBuffer(self._bufferIndex, buf, length)
+        buf = self.readBuffer(self._bufferIndex, length)
         self._bufferIndex = (self._bufferIndex + length) % 256
         if self._payloadTxRx > length : self._payloadTxRx -= length
         else : self._payloadTxRx = 0
@@ -632,8 +622,7 @@ class SX126x :
         else : return buf
 
     def get(self, length = 1) :
-        buf = []
-        self.readBuffer(self._bufferIndex, buf, length)
+        buf = self.readBuffer(self._bufferIndex, length)
         self._bufferIndex = (self._bufferIndex + length) % 256
         if self._payloadTxRx > length : self._payloadTxRx -= length
         else : self._payloadTxRx = 0
@@ -669,30 +658,24 @@ class SX126x :
         return self._payloadTxRx / self._transmitTime
 
     def rssi(self) :
-        rssiPkt = []
-        self.getPacketStatus(rssiPkt, [], [])
-        return rssiPkt[0] / -2.0
+        (rssiPkt, snrPkt, signalRssiPkt) = self.getPacketStatus()
+        return rssiPkt / -2.0
 
     def snr(self) :
-        snrPkt = []
-        self.getPacketStatus([], snrPkt, [])
-        return snrPkt[0] / 4.0
+        (rssiPkt, snrPkt, signalRssiPkt) = self.getPacketStatus()
+        return snrPkt / 4.0
 
     def signalRssi(self) :
-        signalRssiPkt = []
-        self.getPacketStatus([], [], signalRssiPkt)
-        return signalRssiPkt[0] / -2.0
+        (rssiPkt, snrPkt, signalRssiPkt) = self.getPacketStatus()
+        return signalRssiPkt / -2.0
 
     def rssiInst(self) :
-        rssiInst = []
-        self.getRssiInst(rssiInst)
-        return rssiInst[0] / -2.0
+        return self.getRssiInst() / -2.0
 
     def getError(self) :
-        error = []
-        self.getDeviceErrors(error)
+        error = self.getDeviceErrors()
         self.clearDeviceErrors()
-        return error[0]
+        return error
 
 ### INTERRUPT HANDLER METHODS ###
 
@@ -707,13 +690,12 @@ class SX126x :
         self.setDioIrqParams(irqMask, dio1Mask, dio2Mask, dio3Mask)
 
     def _waitIrq(self, timeout = 0) :
-        irqStat = [0x0000]
+        irqStat = 0x0000
         t = time.time()
-        while irqStat[0] == 0x0000 :
-            irqStat.pop(0)
-            self.getIrqStatus(irqStat)
+        while irqStat == 0x0000 :
+            irqStat = self.getIrqStatus()
             if time.time() - t > timeout / 1000 and timeout != 0 : break
-        return irqStat[0]
+        return irqStat
 
     def _interruptTx(self, channel) :
         self._transmitTime = time.time() - self._transmitTime
@@ -721,22 +703,17 @@ class SX126x :
         self._statusInterrupt = self.STATUS_INT_TX
 
     def _interruptRx(self, channel) :
-        payloadLengthRx = []; rxStartBufferPointer = []
-        self.getRxBufferStatus(payloadLengthRx, rxStartBufferPointer)
-        self._payloadTxRx = payloadLengthRx[0]
-        self._bufferIndex = rxStartBufferPointer[0]
+        (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
         if self._rxen != -1 : gpio.output(self._rxen, gpio.LOW)
         self._statusInterrupt = self.STATUS_INT_RX
         self._fixRxTimeout()
 
     def _getStatusInterrupt(self) :
-        irqStat = []
+        irqStat = self.getIrqStatus()
         if self._statusInterrupt == self.STATUS_INT_TX :
-            self.getIrqStatus(irqStat)
             if irqStat[0] & self.IRQ_TIMEOUT : return self.STATUS_TX_TIMEOUT
             else : return self.STATUS_TX_DONE
         elif self._statusInterrupt == self.STATUS_INT_RX :
-            self.getIrqStatus(irqStat)
             if irqStat[0] & self.IRQ_TIMEOUT : return self.STATUS_RX_TIMEOUT
             elif irqStat[0] & self.IRQ_HEADER_ERR : return self.STATUS_HEADER_ERR
             elif irqStat[0] & self.IRQ_CRC_ERR : return self.STATUS_CRC_ERR
@@ -746,105 +723,99 @@ class SX126x :
 ### SX126X API: OPERATIONAL MODES COMMANDS ###
 
     def setSleep(self, sleepConfig: int) :
-        self._writeBytes(0x84, [sleepConfig], 1)
+        self._writeBytes(0x84, (sleepConfig,), 1)
 
     def setStandby(self, stbyConfig: int) :
-        self._writeBytes(0x80, [stbyConfig], 1)
+        self._writeBytes(0x80, (stbyConfig,), 1)
 
     def setFs(self) :
-        self._writeBytes(0xC1, [], 0)
+        self._writeBytes(0xC1, (), 0)
 
     def setTx(self, timeout: int) :
-        buf = [
+        buf = (
             (timeout >> 16) & 0xFF,
             (timeout >> 8) & 0xFF,
             timeout & 0xFF
-        ]
+        )
         self._writeBytes(0x83, buf, 3)
 
     def setRx(self, timeout: int) :
-        buf = [
+        buf = (
             (timeout >> 16) & 0xFF,
             (timeout >> 8) & 0xFF,
             timeout & 0xFF
-        ]
+        )
         self._writeBytes(0x82, buf, 3)
 
     def setTimerOnPreamble(self, enable: int) :
-        self._writeBytes(0x9F, [enable], 1)
+        self._writeBytes(0x9F, (enable,), 1)
 
     def setRxDutyCycle(self, rxPeriod: int, sleepPeriod: int) :
-        buf = [
+        buf = (
             (rxPeriod >> 16) & 0xFF,
             (rxPeriod >> 8) & 0xFF,
             rxPeriod & 0xFF,
             (sleepPeriod >> 16) & 0xFF,
             (sleepPeriod >> 8) & 0xFF,
             sleepPeriod & 0xFF
-        ]
+        )
         self._writeBytes(0x94, buf, 6)
 
     def setCad(self) :
-        self._writeBytes(0xC5, [], 0)
+        self._writeBytes(0xC5, (), 0)
 
     def setTxContinuousWave(self) :
-        self._writeBytes(0xD1, [], 0)
+        self._writeBytes(0xD1, (), 0)
 
     def setTxInfinitePreamble(self) :
-        self._writeBytes(0xD2, [], 0)
+        self._writeBytes(0xD2, (), 0)
 
     def setRegulatorMode(self, modeParam: int) :
-        self._writeBytes(0x96, [modeParam], 1)
+        self._writeBytes(0x96, (modeParam,), 1)
 
     def calibrate(self, calibParam: int) :
-        self._writeBytes(0x89, [calibParam], 1)
+        self._writeBytes(0x89, (calibParam,), 1)
 
     def calibrateImage(self, freq1: int, freq2: int) :
-        buf = [freq1, freq2]
+        buf = (freq1, freq2)
         self._writeBytes(0x98, buf, 2)
 
     def setPaConfig(self, paDutyCycle: int, hpMax: int, deviceSel: int, paLut: int) :
-        buf = [paDutyCycle, hpMax, deviceSel, paLut]
+        buf = (paDutyCycle, hpMax, deviceSel, paLut)
         self._writeBytes(0x95, buf, 4)
 
     def setRxTxFallbackMode(self, fallbackMode: int) :
-        self._writeBytes(0x93, [fallbackMode], 1)
+        self._writeBytes(0x93, (fallbackMode,), 1)
 
 ### SX126X API: REGISTER AND BUFFER ACCESS COMMANDS ###
 
-    def writeRegister(self, address: int, data: list, nData: int) :
-        buf = [
-            (address >> 8) & 0xFF,
+    def writeRegister(self, address: int, data: tuple, nData: int) :
+        buf = (
+            (address >> 8) & 0xFF, 
             address & 0xFF
-        ]
-        for i in range(nData) : buf.append(data[i])
+        ) + tuple(data)
         self._writeBytes(0x0D, buf, nData+2)
 
-    def readRegister(self, address: int, data: list, nData: int) :
-        buf = []
-        addr = [
+    def readRegister(self, address: int, nData: int) -> tuple :
+        addr = (
             (address >> 8) & 0xFF,
             address & 0xFF
-        ]
-        self._readBytes(0x1D, buf, nData+1, addr, 2)
-        if len(buf) > 0 : 
-            for i in range(nData) : data.append(buf[i+1])
+        )
+        buf = self._readBytes(0x1D, nData+1, addr, 2)
+        return buf[1:]
 
-    def writeBuffer(self, offset: int, data: list, nData: int) :
-        buf = [offset]
-        for i in range(nData) : buf.append(data[i]) 
+    def writeBuffer(self, offset: int, data: tuple, nData: int) :
+        buf = (offset,) + tuple(data)
         self._writeBytes(0x0E, buf, nData+1)
 
-    def readBuffer(self, offset: int, data: list, nData: int) :
-        buf = []
-        self._readBytes(0x1E, buf, nData+1, [offset], 1)
-        if len(buf) > 0 : 
-            for i in range(nData) : data.append(buf[i+1])
+    def readBuffer(self, offset: int, nData: int) -> tuple :
+        buf = self._readBytes(0x1E, nData+1, (offset,), 1)
+        return buf[1:]
 
 ### SX126X API: DIO AND IRQ CONTROL ###
 
     def setDioIrqParams(self, irqMask: int, dio1Mask: int, dio2Mask: int, dio3Mask: int) :
-        buf = [
+        buf = (
             (irqMask >> 8) & 0xFF,
             irqMask & 0xFF,
             (dio1Mask >> 8) & 0xFF,
@@ -853,64 +824,60 @@ class SX126x :
             dio2Mask & 0xFF,
             (dio3Mask >> 8) & 0xFF,
             dio3Mask & 0xFF
-        ]
+        )
         self._writeBytes(0x08, buf, 8)
 
-    def getIrqStatus(self, irqStatus: list) :
-        buf = []
-        self._readBytes(0x12, buf, 3)
-        if len(buf) > 0 : 
-            irqStatus.append((buf[1] << 8) | buf[2])
+    def getIrqStatus(self) -> int :
+        buf = self._readBytes(0x12, 3)
+        return (buf[1] << 8) | buf[2]
 
     def clearIrqStatus(self, clearIrqParam: int) :
-        buf = [
+        buf = (
             (clearIrqParam >> 8) & 0xFF,
             clearIrqParam & 0xFF
-        ]
+        )
         self._writeBytes(0x02, buf, 2)
 
     def setDio2AsRfSwitchCtrl(self, enable: int) :
-        self._writeBytes(0x9D, [enable], 1)
+        self._writeBytes(0x9D, (enable,), 1)
 
     def setDio3AsTcxoCtrl(self, tcxoVoltage: int, delay: int) :
-        buf = [
+        buf = (
             tcxoVoltage & 0xFF,
             (delay >> 16) & 0xFF,
             (delay >> 8) & 0xFF,
             delay & 0xFF
-        ]
+        )
         self._writeBytes(0x97, buf, 4)
 
 ### SX126X API: RF, MODULATION, AND PACKET COMMANDS ###
 
     def setRfFrequency(self, rfFreq: int) :
-        buf = [
+        buf = (
             (rfFreq >> 24) & 0xFF,
             (rfFreq >> 16) & 0xFF,
             (rfFreq >> 8) & 0xFF,
             rfFreq & 0xFF
-        ]
+        )
         self._writeBytes(0x86, buf, 4)
 
     def setPacketType(self, packetType: int) :
-        self._writeBytes(0x8A, [packetType], 1)
+        self._writeBytes(0x8A, (packetType,), 1)
 
-    def getPakcetType(self, packetType: list) :
-        buf = []
-        self._readBytes(0x11, buf, 2)
-        if len(buf) > 0 : 
-            packetType.append(buf[1])
+    def getPakcetType(self) -> int :
+        buf = self._readBytes(0x11, 2)
+        return buf[1]
 
     def setTxParams(self, power: int, rampTime: int) :
-        buf = [power, rampTime]
+        buf = (power, rampTime)
         self._writeBytes(0x8E, buf, 2)
 
     def setModulationParamsLoRa(self, sf: int, bw: int, cr: int, ldro: int) :
-        buf = [sf, bw, cr, ldro, 0, 0, 0, 0]
+        buf = (sf, bw, cr, ldro, 0, 0, 0, 0)
         self._writeBytes(0x8B, buf, 8)
 
     def setModulationParamsFsk(self, br: int, pulseShape: int, bandwidth: int, Fdev: int) :
-        buf = [
+        buf = (
             (br >> 16) & 0xFF,
             (br >> 8) & 0xFF,
             br & 0xFF,
@@ -919,11 +886,11 @@ class SX126x :
             (br >> 16) & 0xFF,
             (br >> 8) & 0xFF,
             Fdev & 0xFF
-        ]
+        )
         self._writeBytes(0x8B, buf, 8)
 
     def setPacketParamsLoRa(self, preambleLength: int, headerType: int, payloadLength: int, crcType: int, invertIq: int) :
-        buf = [
+        buf = (
             (preambleLength >> 8) & 0xFF,
             preambleLength & 0xFF,
             headerType,
@@ -933,11 +900,11 @@ class SX126x :
             0,
             0,
             0
-        ]
+        )
         self._writeBytes(0x8C, buf, 9)
 
     def setPacketParamsFsk(self, preambleLength: int, preambleDetector: int, syncWordLength: int, addrComp: int, packetType: int, payloadLength: int, crcType: int, whitening: int) :
-        buf = [
+        buf = (
             (preambleLength >> 8) & 0xFF,
             preambleLength & 0xFF,
             preambleDetector,
@@ -947,11 +914,11 @@ class SX126x :
             payloadLength,
             crcType,
             whitening
-        ]
+        )
         self._writeBytes(0x8C, buf, 9)
 
     def setCadParams(self, cadSymbolNum: int, cadDetPeak: int, cadDetMin: int, cadExitMode: int, cadTimeout: int) :
-        buf = [
+        buf = (
             cadSymbolNum,
             cadDetPeak,
             cadDetMin,
@@ -959,111 +926,94 @@ class SX126x :
             (cadTimeout >> 16) & 0xFF,
             (cadTimeout >> 8) & 0xFF,
             cadTimeout & 0xFF
-        ]
+        )
         self._writeBytes(0x88, buf, 7)
 
     def setBufferBaseAddress(self, txBaseAddress: int, rxBaseAddress: int) :
-        buf = [txBaseAddress, rxBaseAddress]
+        buf = (txBaseAddress, rxBaseAddress)
         self._writeBytes(0x8F, buf, 2)
 
     def setLoRaSymbNumTimeout(self, symbnum: int) :
-        self._writeBytes(0xA0, [symbnum], 1)
+        self._writeBytes(0xA0, (symbnum,), 1)
 
 ### SX126X API: STATUS COMMANDS ###
 
-    def getStatus(self, status: list) :
-        buf = []
-        self._readBytes(0xC0, buf, 1)
-        if len(buf) > 0 :
-            status.append(buf[0])
+    def getStatus(self) -> int :
+        buf = self._readBytes(0xC0, 1)
+        return buf[0]
 
-    def getRxBufferStatus(self, payloadLengthRx: list, rxStartBufferPointer: list) :
-        buf = []
-        self._readBytes(0x13, buf, 3)
-        if len(buf) > 0 : 
-            payloadLengthRx.append(buf[1])
-            rxStartBufferPointer.append(buf[2])
+    def getRxBufferStatus(self) -> tuple :
+        buf = self._readBytes(0x13, 3)
+        return buf[1:3]
 
-    def getPacketStatus(self, rssiPkt: list, snrPkt: list, signalRssiPkt: list) :
-        buf = []
-        self._readBytes(0x14, buf, 4)
-        if len(buf) > 0 : 
-            rssiPkt.append(buf[1])
-            snrPkt.append(buf[2])
-            signalRssiPkt.append(buf[3]) 
+    def getPacketStatus(self) -> tuple :
+        buf = self._readBytes(0x14, 4)
+        return buf[1:4]
 
-    def getRssiInst(self, rssiInst: list) :
-        buf = []
-        self._readBytes(0x15, buf, 2)
-        if len(buf) > 0 : 
-            rssiInst.append(buf[1])
+    def getRssiInst(self) -> int :
+        buf = self._readBytes(0x15, 2)
+        return buf[1]
 
-    def getStats(self, nbPktReceived: list, nbPktCrcError: list, nbPktHeaderErr: list) :
-        buf = []
-        self._readBytes(0x10, buf, 7)
-        if len(buf) > 0 : 
-            nbPktReceived.append((buf[1] >> 8) | buf[2])
-            nbPktCrcError.append((buf[3] >> 8) | buf[4])
-            nbPktHeaderErr.append((buf[5] >> 8) | buf[6])
+    def getStats(self) -> tuple :
+        buf = self._readBytes(0x10, 7)
+        return (
+            (buf[1] >> 8) | buf[2],
+            (buf[3] >> 8) | buf[4],
+            (buf[5] >> 8) | buf[6]
+        )
 
     def resetStats(self) :
-        buf = [0, 0, 0, 0, 0, 0]
+        buf = (0, 0, 0, 0, 0, 0)
         self._writeBytes(0x00, buf, 6)
 
-    def getDeviceErrors(self, opError: list) :
-        buf = []
-        self._readBytes(0x17, buf, 2)
-        if len(buf) > 0 : 
-            opError.append(buf[1])
+    def getDeviceErrors(self) -> int :
+        buf = self._readBytes(0x17, 2)
+        return buf[1]
 
     def clearDeviceErrors(self) :
-        buf = [0, 0]
+        buf = (0, 0)
         self._writeBytes(0x07, buf, 2)
 
 ### SX126X API: WORKAROUND FUNCTIONS ###
 
     def _fixLoRaBw500(self, bw: int) :
-        packetType = []
-        self.getPakcetType(packetType)
-        value = []
-        self.readRegister(self.REG_TX_MODULATION, value, 1)
-        if packetType == self.LORA_MODEM and bw == self.LORA_BW_500 : value[0] = value[0] & 0xFB
-        else : value[0] = value[0] | 0x04
-        self.writeRegister(self.REG_TX_MODULATION, value, 1)
+        packetType = self.getPakcetType()
+        buf = self.readRegister(self.REG_TX_MODULATION, 1)
+        value = buf[0] | 0x04
+        if packetType == self.LORA_MODEM and bw == self.BW_500000 :
+            value = buf[0] & 0xFB
+        self.writeRegister(self.REG_TX_MODULATION, (value,), 1)
 
     def _fixResistanceAntenna(self) :
-        value = []
-        self.readRegister(self.REG_TX_CLAMP_CONFIG, value, 1)
-        value[0] = value[0] | 0x1E
-        self.writeRegister(self.REG_TX_CLAMP_CONFIG, value, 1)
+        buf = self.readRegister(self.REG_TX_CLAMP_CONFIG, 1)
+        value = buf[0] | 0x1E
+        self.writeRegister(self.REG_TX_CLAMP_CONFIG, (value,), 1)
 
     def _fixRxTimeout(self) :
-        value = [0]
-        self.writeRegister(self.REG_RTC_CONTROL, value, 1)
-        value = []
-        self.readRegister(self.REG_EVENT_MASK, value, 1)
-        value[0] = value[0] | 0x02
-        self.writeRegister(self.REG_EVENT_MASK, value, 1)
+        self.writeRegister(self.REG_RTC_CONTROL, (0,), 1)
+        buf = self.readRegister(self.REG_EVENT_MASK, 1)
+        value = buf[0] | 0x02
+        self.writeRegister(self.REG_EVENT_MASK, (value,), 1)
 
-    def _fixInvertedIq(self, invertIq: int) :
-        value = []
-        self.readRegister(self.REG_IQ_POLARITY_SETUP, value, 1)
-        if invertIq : value[0] = value[0] | 0x04
-        else : value[0] = value[0] & 0xFB
-        self.writeRegister(self.REG_IQ_POLARITY_SETUP, value, 1)
+    def _fixInvertedIq(self, invertIq: bool) :
+        buf = self.readRegister(self.REG_IQ_POLARITY_SETUP, 1)
+        value = buf[0] & 0xFB
+        if invertIq :
+            value = buf[0] | 0x04
+        self.writeRegister(self.REG_IQ_POLARITY_SETUP, (value,), 1)
 
 ### SX126X API: UTILITIES ###
 
-    def _writeBytes(self, opCode: int, data: list, nBytes: int) :
+    def _writeBytes(self, opCode: int, data: tuple, nBytes: int) :
         if self.busyCheck() : return
         buf = [opCode]
         for i in range(nBytes) : buf.append(data[i])
         spi.xfer2(buf)
 
-    def _readBytes(self, opCode: int, data: list, nBytes: int, address: list = [], nAddress: int = 0) :
-        if self.busyCheck() : return
+    def _readBytes(self, opCode: int, nBytes: int, address: tuple = (), nAddress: int = 0) -> tuple :
+        if self.busyCheck() : return ()
         buf = [opCode]
         for i in range(nAddress) : buf.append(address[i])
         for i in range(nBytes) : buf.append(0x00)
         feedback = spi.xfer2(buf)
-        for i in range(nBytes) : data.append(feedback[i+nAddress+1])
+        return tuple(feedback[nAddress+1:])
