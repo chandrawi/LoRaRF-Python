@@ -1,7 +1,7 @@
-# import os, sys
-# currentdir = os.path.dirname(os.path.realpath(__file__))
-# parentdir = os.path.dirname(currentdir)
-# sys.path.append(parentdir)
+import os, sys
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
 from LoRaRF import SX126x
 from LoRaRF import LoRaIO
 import time
@@ -25,24 +25,24 @@ print("Set frequency to 915 Mhz")
 
 # Set TX power, default power for SX1262 and SX1268 are +22 dBm and for SX1261 is +14 dBm
 # This function will set PA config with optimal setting for requested TX power
-LoRa.setTxPower(LoRa.TX_POWER_SX1262_17)
+LoRa.setTxPower(17, LoRa.TX_POWER_SX1262)
 print("Set TX power to +17 dBm")
 
 # Configure modulation parameter including spreading factor (SF), bandwidth (BW), and coding rate (CR)
 # Receiver must have same SF and BW setting with transmitter to be able to receive LoRa packet
 sf = 7
-bw = LoRa.LORA_BW_125
-cr = LoRa.LORA_CR_4_5
+bw = LoRa.BW_125000
+cr = LoRa.CR_4_5
 LoRa.setLoRaModulation(sf, bw, cr)
 print("Set modulation parameters:\n\tSpreading factor = 7\n\tBandwidth = 125 kHz\n\tCoding rate = 4/5")
 
 # Configure packet parameter including header type, preamble length, payload length, and CRC type
 # The explicit packet includes header contain CR, number of byte, and CRC type
 # Receiver can receive packet with different CR and packet parameters in explicit header mode
-headerType = LoRa.LORA_HEADER_EXPLICIT
+headerType = LoRa.HEADER_EXPLICIT
 preambleLength = 12
 payloadLength = 15
-crcType = LoRa.LORA_CRC_ON
+crcType = LoRa.CRC_ON
 LoRa.setLoRaPacket(headerType, preambleLength, payloadLength, crcType)
 print("Set packet parameters:\n\tExplicit header type\n\tPreamble length = 12\n\tPayload Length = 15\n\tCRC on")
 

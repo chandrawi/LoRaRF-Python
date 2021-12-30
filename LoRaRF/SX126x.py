@@ -34,62 +34,37 @@ class SX126x :
     STANDBY_XOSC                           = 0x01        #               using 32 MHz crystal oscillator
 
     # SetTx
-    TX_MODE_SINGLE                         = 0x000000    # Tx timeout duration: no timeout (Rx single mode)
+    TX_SINGLE                              = 0x000000    # Tx timeout duration: no timeout (Rx single mode)
 
     # SetRx
-    RX_MODE_SINGLE                         = 0x000000    # Rx timeout duration: no timeout (Rx single mode)
-    RX_MODE_CONTINUOUS                     = 0xFFFFFF    #                      infinite (Rx continuous mode)
-
-    # StopTimerOnPreamble
-    STOP_PREAMBLE_OFF                      = 0x00        # stop timer on: sync word or header (default)
-    STOP_PREAMBLE_ON                       = 0x01        #                preamble detection
+    RX_SINGLE                              = 0x000000    # Rx timeout duration: no timeout (Rx single mode)
+    RX_CONTINUOUS                          = 0xFFFFFF    #                      infinite (Rx continuous mode)
 
     # SetRegulatorMode
     REGULATOR_LDO                          = 0x00        # set regulator mode: LDO (default)
     REGULATOR_DC_DC                        = 0x01        #                     DC-DC
 
-    # Calibrate
-    CALIBRATE_RC64K_OFF                    = 0x00        # 64 kHz RC osc. calibration: disabled
-    CALIBRATE_RC64K_ON                     = 0x01        #                             enabled
-    CALIBRATE_RC13M_OFF                    = 0x00        # 13 MHz RC osc. calibration: disabled
-    CALIBRATE_RC13M_ON                     = 0x02        #                             enabled
-    CALIBRATE_PLL_OFF                      = 0x00        # PLL calibration: disabled
-    CALIBRATE_PLL_ON                       = 0x04        #                  enabled
-    CALIBRATE_ADC_PULSE_OFF                = 0x00        # ADC pulse calibration: disabled
-    CALIBRATE_ADC_PULSE_ON                 = 0x08        #                        enabled
-    CALIBRATE_ADC_BULK_N_OFF               = 0x00        # ADC bulk N calibration: disabled
-    CALIBRATE_ADC_BULK_N_ON                = 0x10        #                         enabled
-    CALIBRATE_ADC_BULK_P_OFF               = 0x00        # ADC bulk P calibration: disabled
-    CALIBRATE_ADC_BULK_P_ON                = 0x20        #                         enabled
-    CALIBRATE_IMAGE_OFF                    = 0x00        # image calibration: disabled
-    CALIBRATE_IMAGE_ON                     = 0x40        #                    enabled
-
     # CalibrateImage
-    CAL_IMG_430_440                        = 0x6B6F      # ISM band: 430-440 Mhz
-    CAL_IMG_470_510                        = 0x7581      #           470-510 Mhz
-    CAL_IMG_779_787                        = 0xC1C5      #           779-787 Mhz
-    CAL_IMG_863_870                        = 0xD7DB      #           863-870 Mhz
-    CAL_IMG_902_928                        = 0xE1E9      #           902-928 Mhz
+    CAL_IMG_430                            = 0x6B        # ISM band: 430-440 Mhz
+    CAL_IMG_440                            = 0x6F
+    CAL_IMG_470                            = 0x75        #           470-510 Mhz
+    CAL_IMG_510                            = 0x81
+    CAL_IMG_779                            = 0xC1        #           779-787 Mhz
+    CAL_IMG_787                            = 0xC5
+    CAL_IMG_863                            = 0xD7        #           863-870 Mhz
+    CAL_IMG_870                            = 0xDB
+    CAL_IMG_902                            = 0xE1        #           902-928 Mhz
+    CAL_IMG_928                            = 0xE9
 
     # SetPaConfig
-    TX_POWER_SX1261_15                     = 0x060001    # pa config for SX1261: +15 dBm
-    TX_POWER_SX1261_14                     = 0x040001    #                       +14 dBm
-    TX_POWER_SX1261_10                     = 0x010001    #                       +10 dBm
-    TX_POWER_SX1262_22                     = 0x040700    # pa config for SX1262: +22 dBm
-    TX_POWER_SX1262_20                     = 0x030500    #                       +20 dBm
-    TX_POWER_SX1262_17                     = 0x020300    #                       +17 dBm
-    TX_POWER_SX1262_14                     = 0x020200    #                       +14 dBm
-    TX_POWER_SX1268_22                     = 0x040700    # pa config for SX1268: +22 dBm
-    TX_POWER_SX1268_20                     = 0x030500    #                       +20 dBm
-    TX_POWER_SX1268_17                     = 0x020300    #                       +17 dBm
-    TX_POWER_SX1268_14                     = 0x040600    #                       +14 dBm
-    TX_POWER_SX1268_10                     = 0x000300    #                       +10 dBm
-    PA_CONFIG_PA_LUT                       = 0x01        # paLut config always = 0x01
+    TX_POWER_SX1261                        = 0x01        # device version for TX power: SX1261
+    TX_POWER_SX1262                        = 0x02        #                              SX1262
+    TX_POWER_SX1268                        = 0x08        #                              SX1268
 
     # SetRxTxFallbackMode
-    RX_TX_FALLBACK_MODE_FS                 = 0x40        # after Rx/Tx go to: FS mode
-    RX_TX_FALLBACK_MODE_STDBY_XOSC         = 0x30        #                    standby mode with crystal oscillator
-    RX_TX_FALLBACK_MODE_STDBY_RC           = 0x20        #                    standby mode with RC oscillator (default)
+    FALLBACK_FS                            = 0x40        # after Rx/Tx go to: FS mode
+    FALLBACK_STDBY_XOSC                    = 0x30        #                    standby mode with crystal oscillator
+    FALLBACK_STDBY_RC                      = 0x20        #                    standby mode with RC oscillator (default)
 
     # SetDioIrqParams
     IRQ_TX_DONE                            = 0x0001      # packet transmission completed
@@ -141,87 +116,78 @@ class SX126x :
     PA_RAMP_3400U                          = 0x07        #            3400 us
 
     # SetModulationParams
-    LORA_SF_5                              = 0x05        # LoRa spreading factor: 5
-    LORA_SF_6                              = 0x06        #                        6
-    LORA_SF_7                              = 0x07        #                        7
-    LORA_SF_8                              = 0x08        #                        8
-    LORA_SF_9                              = 0x09        #                        9
-    LORA_SF_10                             = 0x0A        #                        10
-    LORA_SF_11                             = 0x0B        #                        11
-    LORA_SF_12                             = 0x0C        #                        12
-    LORA_BW_7                              = 0x00        # LoRa bandwidth: 7.8 kHz
-    LORA_BW_10                             = 0x08        #                 10.4 kHz
-    LORA_BW_15                             = 0x01        #                 15.6 kHz
-    LORA_BW_20                             = 0x09        #                 20.8 kHz
-    LORA_BW_31                             = 0x02        #                 31.25 kHz
-    LORA_BW_41                             = 0x0A        #                 41.7 kHz
-    LORA_BW_62                             = 0x03        #                 62.5 kHz
-    LORA_BW_125                            = 0x04        #                 125.0 kHz
-    LORA_BW_250                            = 0x05        #                 250.0 kHz
-    LORA_BW_500                            = 0x06        #                 500.0 kHz
-    LORA_CR_OFF                            = 0x00        # LoRa coding rate: no coding rate
-    LORA_CR_4_4                            = 0x00        #                   4/4 (no coding rate)
-    LORA_CR_4_5                            = 0x01        #                   4/5
-    LORA_CR_4_6                            = 0x02        #                   4/6
-    LORA_CR_4_7                            = 0x03        #                   4/7
-    LORA_CR_4_8                            = 0x04        #                   4/8
-    LORA_LDRO_OFF                          = 0x00        # LoRa low data rate optimization: disabled
-    LORA_LDRO_ON                           = 0x01        #                                  enabled
+    BW_7800                                = 0x00        # LoRa bandwidth: 7.8 kHz
+    BW_10400                               = 0x08        #                 10.4 kHz
+    BW_15600                               = 0x01        #                 15.6 kHz
+    BW_20800                               = 0x09        #                 20.8 kHz
+    BW_31250                               = 0x02        #                 31.25 kHz
+    BW_41700                               = 0x0A        #                 41.7 kHz
+    BW_62500                               = 0x03        #                 62.5 kHz
+    BW_125000                              = 0x04        #                 125.0 kHz
+    BW_250000                              = 0x05        #                 250.0 kHz
+    BW_500000                              = 0x06        #                 500.0 kHz
+    CR_4_4                                 = 0x00        # LoRa coding rate: 4/4 (no coding rate)
+    CR_4_5                                 = 0x01        #                   4/5
+    CR_4_6                                 = 0x01        #                   4/6
+    CR_4_7                                 = 0x01        #                   4/7
+    CR_4_8                                 = 0x01        #                   4/8
+    LDRO_OFF                               = 0x00        # LoRa low data rate optimization: disabled
+    LDRO_ON                                = 0x01        #                                  enabled
 
     # SetModulationParams for FSK packet type
-    FSK_PULSE_NO_FILTER                    = 0x00        # FSK pulse shape: no filter applied
-    FSK_PULSE_GAUSSIAN_BT_0_3              = 0x08        #                  Gaussian BT 0.3
-    FSK_PULSE_GAUSSIAN_BT_0_5              = 0x09        #                  Gaussian BT 0.5
-    FSK_PULSE_GAUSSIAN_BT_0_7              = 0x0A        #                  Gaussian BT 0.7
-    FSK_PULSE_GAUSSIAN_BT_1                = 0x0B        #                  Gaussian BT 1
-    FSK_BW_4800                            = 0x1F        # FSK bandwidth: 4.8 kHz DSB
-    FSK_BW_5800                            = 0x17        #                5.8 kHz DSB
-    FSK_BW_7300                            = 0x0F        #                7.3 kHz DSB
-    FSK_BW_9700                            = 0x1E        #                9.7 kHz DSB
-    FSK_BW_11700                           = 0x16        #                11.7 kHz DSB
-    FSK_BW_14600                           = 0x0E        #                14.6 kHz DSB
-    FSK_BW_19500                           = 0x1D        #                19.5 kHz DSB
-    FSK_BW_23400                           = 0x15        #                23.4 kHz DSB
-    FSK_BW_29300                           = 0x0D        #                29.3 kHz DSB
-    FSK_BW_39000                           = 0x1C        #                39 kHz DSB
-    FSK_BW_46900                           = 0x14        #                46.9 kHz DSB
-    FSK_BW_58600                           = 0x0C        #                58.6 kHz DSB
-    FSK_BW_78200                           = 0x1B        #                78.2 kHz DSB
-    FSK_BW_93800                           = 0x13        #                93.8 kHz DSB
-    FSK_BW_117300                          = 0x0B        #                117.3 kHz DSB
-    FSK_BW_156200                          = 0x1A        #                156.2 kHz DSB
-    FSK_BW_187200                          = 0x12        #                187.2 kHz DSB
-    FSK_BW_234300                          = 0x0A        #                232.3 kHz DSB
-    FSK_BW_312000                          = 0x19        #                312 kHz DSB
-    FSK_BW_373600                          = 0x11        #                373.6 kHz DSB
-    FSK_BW_467000                          = 0x09        #                476 kHz DSB
+    PULSE_NO_FILTER                        = 0x00        # FSK pulse shape: no filter applied
+    PULSE_GAUSSIAN_BT_0_3                  = 0x08        #                  Gaussian BT 0.3
+    PULSE_GAUSSIAN_BT_0_5                  = 0x09        #                  Gaussian BT 0.5
+    PULSE_GAUSSIAN_BT_0_7                  = 0x0A        #                  Gaussian BT 0.7
+    PULSE_GAUSSIAN_BT_1                    = 0x0B        #                  Gaussian BT 1
+    BW_4800                                = 0x1F        # FSK bandwidth: 4.8 kHz DSB
+    BW_5800                                = 0x17        #                5.8 kHz DSB
+    BW_7300                                = 0x0F        #                7.3 kHz DSB
+    BW_9700                                = 0x1E        #                9.7 kHz DSB
+    BW_11700                               = 0x16        #                11.7 kHz DSB
+    BW_14600                               = 0x0E        #                14.6 kHz DSB
+    BW_19500                               = 0x1D        #                19.5 kHz DSB
+    BW_23400                               = 0x15        #                23.4 kHz DSB
+    BW_29300                               = 0x0D        #                29.3 kHz DSB
+    BW_39000                               = 0x1C        #                39 kHz DSB
+    BW_46900                               = 0x14        #                46.9 kHz DSB
+    BW_58600                               = 0x0C        #                58.6 kHz DSB
+    BW_78200                               = 0x1B        #                78.2 kHz DSB
+    BW_93800                               = 0x13        #                93.8 kHz DSB
+    BW_117300                              = 0x0B        #                117.3 kHz DSB
+    BW_156200                              = 0x1A        #                156.2 kHz DSB
+    BW_187200                              = 0x12        #                187.2 kHz DSB
+    BW_234300                              = 0x0A        #                232.3 kHz DSB
+    BW_312000                              = 0x19        #                312 kHz DSB
+    BW_373600                              = 0x11        #                373.6 kHz DSB
+    BW_467000                              = 0x09        #                476 kHz DSB
 
     # SetPacketParams
-    LORA_HEADER_EXPLICIT                   = 0x00        # LoRa header mode: explicit
-    LORA_HEADER_IMPLICIT                   = 0x01        #                   implicit
-    LORA_CRC_OFF                           = 0x00        # LoRa CRC mode: disabled
-    LORA_CRC_ON                            = 0x01        #                enabled
-    LORA_IQ_STANDARD                       = 0x00        # LoRa IQ setup: standard
-    LORA_IQ_INVERTED                       = 0x01        #                inverted
+    HEADER_EXPLICIT                        = 0x00        # LoRa header mode: explicit
+    HEADER_IMPLICIT                        = 0x01        #                   implicit
+    CRC_OFF                                = 0x00        # LoRa CRC mode: disabled
+    CRC_ON                                 = 0x01        #                enabled
+    IQ_STANDARD                            = 0x00        # LoRa IQ setup: standard
+    IQ_INVERTED                            = 0x01        #                inverted
 
     # SetPacketParams for FSK packet type
-    FSK_PREAMBLE_DET_LEN_OFF               = 0x00        # FSK preamble detector length: off
-    FSK_PREAMBLE_DET_LEN_8                 = 0x04        #                               8-bit
-    FSK_PREAMBLE_DET_LEN_16                = 0x05        #                               16-bit
-    FSK_PREAMBLE_DET_LEN_24                = 0x06        #                               24-bit
-    FSK_PREAMBLE_DET_LEN_32                = 0x07        #                               32-bit
-    FSK_ADDR_COMP_OFF                      = 0x00        # FSK address filtering: off
-    FSK_ADDR_COMP_NODE                     = 0x01        #                        filtering on node address
-    FSK_ADDR_COMP_ALL                      = 0x02        #                        filtering on node and broadcast address
-    FSK_PACKET_KNOWN                       = 0x00        # FSK packet type: the packet length known on both side
-    FSK_PACKET_VARIABLE                    = 0x01        #                  the packet length on variable size
-    FSK_CRC_OFF                            = 0x01        # FSK CRC type: no CRC
-    FSK_CRC_1                              = 0x00        #               CRC computed on 1 byte
-    FSK_CRC_2                              = 0x02        #               CRC computed on 2 byte
-    FSK_CRC_1_INV                          = 0x04        #               CRC computed on 1 byte and inverted
-    FSK_CRC_2_INV                          = 0x06        #               CRC computed on 2 byte and inverted
-    FSK_WHITENING_OFF                      = 0x00        # FSK whitening: no encoding
-    FSK_WHITENING_ON                       = 0x01        #                whitening enable
+    PREAMBLE_DET_LEN_OFF                   = 0x00        # FSK preamble detector length: off
+    PREAMBLE_DET_LEN_8                     = 0x04        #                               8-bit
+    PREAMBLE_DET_LEN_16                    = 0x05        #                               16-bit
+    PREAMBLE_DET_LEN_24                    = 0x06        #                               24-bit
+    PREAMBLE_DET_LEN_32                    = 0x07        #                               32-bit
+    ADDR_COMP_OFF                          = 0x00        # FSK address filtering: off
+    ADDR_COMP_NODE                         = 0x01        #                        filtering on node address
+    ADDR_COMP_ALL                          = 0x02        #                        filtering on node and broadcast address
+    PACKET_KNOWN                           = 0x00        # FSK packet type: the packet length known on both side
+    PACKET_VARIABLE                        = 0x01        #                  the packet length on variable size
+    CRC_0                                  = 0x01        # FSK CRC type: no CRC
+    CRC_1                                  = 0x00        #               CRC computed on 1 byte
+    CRC_2                                  = 0x02        #               CRC computed on 2 byte
+    CRC_1_INV                              = 0x04        #               CRC computed on 1 byte and inverted
+    CRC_2_INV                              = 0x06        #               CRC computed on 2 byte and inverted
+    WHITENING_OFF                          = 0x00        # FSK whitening: no encoding
+    WHITENING_ON                           = 0x01        #                whitening enable
 
     # SetCadParams
     CAD_ON_1_SYMB                          = 0x00        # number of symbols used for CAD: 1
@@ -259,8 +225,10 @@ class SX126x :
     LORA_SYNC_WORD_PRIVATE                 = 0x0741      # LoRa SyncWord for private network (default)
 
     # RxGain
-    RX_GAIN_POWER_SAVING                   = 0x94        # gain used in Rx mode: power saving gain (default)
-    RX_GAIN_BOOSTED                        = 0x96        #                       boosted gain
+    RX_GAIN_POWER_SAVING                   = 0x00        # gain used in Rx mode: power saving gain (default)
+    RX_GAIN_BOOSTED                        = 0x01        #                       boosted gain
+    POWER_SAVING_GAIN                      = 0x94        # power saving gain register value
+    BOOSTED_GAIN                           = 0x96        # boosted gain register value
 
     # TX and RX operation status 
     STATUS_DEFAULT                         = 0           # default status (false)
@@ -268,7 +236,7 @@ class SX126x :
     STATUS_TX_TIMEOUT                      = 2
     STATUS_TX_DONE                         = 3
     STATUS_RX_WAIT                         = 4
-    STATUS_RX_CONTINUOUS_WAIT              = 5
+    STATUS_RX_CONTINUOUS                   = 5
     STATUS_RX_TIMEOUT                      = 6
     STATUS_RX_DONE                         = 7
     STATUS_HEADER_ERR                      = 8
@@ -296,15 +264,15 @@ class SX126x :
     # LoRa setting
     _int = 1
     _modem = LORA_MODEM
-    _sf = LORA_SF_7
-    _bw = LORA_BW_125
-    _cr = LORA_CR_4_5
-    _ldro = LORA_LDRO_OFF
-    _headerType = LORA_HEADER_EXPLICIT
-    _preambleLen = 12
-    _payLoadLength = 32
-    _crcType = LORA_CRC_ON
-    _invertIq = LORA_IQ_STANDARD
+    _sf = 7
+    _bw = BW_125000
+    _cr = 5
+    _ldro = 0
+    _headerType = HEADER_EXPLICIT
+    _preambleLength = 12
+    _payloadLength = 32
+    _crcType = CRC_ON
+    _invertIq = IQ_STANDARD
 
     # Operation properties
     _bufferIndex = 0
@@ -313,8 +281,6 @@ class SX126x :
     _statusRxContinuous = STATUS_DEFAULT
     _statusInterrupt = STATUS_INT_INIT
     _transmitTime = 0
-    _pinToLow = -1
-    _intSet = False
 
     def __init__(self, bus, cs, GPIO_lib, reset, busy, irq = -1, txen = -1, rxen = -1) :
         self._bus = bus
@@ -444,60 +410,76 @@ class SX126x :
         self._calibrateImage(calFreqMin, calFreqMax)
         self._setRfFrequency(rfFreq)
 
-    def setTxPower(self, txPower) :
-        if txPower == self.TX_POWER_SX1261_15 :
+    def setTxPower(self, txPower, version=TX_POWER_SX1262) :
+
+        #  maximum TX power is 22 dBm and 15 dBm for SX1261
+        if txPower > 22 : txPower = 22
+        elif txPower > 15 and version == self.TX_POWER_SX1261 : txPower = 15
+
+        paDutyCycle = 0x00
+        hpMax = 0x00
+        deviceSel = 0x00
+        power = 0x0E
+        if version == self.TX_POWER_SX1261 : deviceSel = 0x01
+        # set parameters for PA config and TX params configuration
+        if txPower == 22 :
+            paDutyCycle = 0x04
+            hpMax = 0x07
+            power = 0x16
+        elif txPower >= 20 :
+            paDutyCycle = 0x03
+            hpMax = 0x05
+            power = 0x16
+        elif txPower >= 17 :
+            paDutyCycle = 0x02
+            hpMax = 0x03
+            power = 0x16
+        elif txPower >= 14 and version == self.TX_POWER_SX1261 :
+            paDutyCycle = 0x04
+            hpMax = 0x00
             power = 0x0E
-            ramp = self.PA_RAMP_200U
-        elif txPower == self.TX_POWER_SX1261_14 :
-            power = 0x0E
-            ramp = self.PA_RAMP_200U
-        elif txPower == self.TX_POWER_SX1261_10 :
+        elif txPower >= 14 and version == self.TX_POWER_SX1262 :
+            paDutyCycle = 0x02
+            hpMax = 0x02
+            power = 0x16
+        elif txPower >= 14 and version == self.TX_POWER_SX1268 :
+            paDutyCycle = 0x04
+            hpMax = 0x06
+            power = 0x0F
+        elif txPower >= 10 and version == self.TX_POWER_SX1261 :
+            paDutyCycle = 0x01
+            hpMax = 0x00
             power = 0x0D
-            ramp = self.PA_RAMP_80U
-        elif txPower == self.TX_POWER_SX1262_22 or txPower == self.TX_POWER_SX1268_22 :
-            power = 0x16
-            ramp = self.PA_RAMP_800U
-        elif txPower == self.TX_POWER_SX1262_20 or txPower == self.TX_POWER_SX1268_20 :
-            power = 0x16
-            ramp = self.PA_RAMP_800U
-        elif txPower == self.TX_POWER_SX1262_17 or txPower == self.TX_POWER_SX1268_17 :
-            power = 0x16
-            ramp = self.PA_RAMP_200U
-        elif txPower == self.TX_POWER_SX1262_14 :
-            power = 0x16
-            ramp = self.PA_RAMP_200U
-        elif txPower == self.TX_POWER_SX1268_14 :
+        elif txPower >= 10 and version == self.TX_POWER_SX1268 :
+            paDutyCycle = 0x00
+            hpMax = 0x03
             power = 0x0F
-            ramp = self.PA_RAMP_200U
-        elif txPower == self.TX_POWER_SX1268_10 :
-            power = 0x0F
-            ramp = self.PA_RAMP_80U
-        else :
-            return
-        paDutyCycle = (txPower >> 16) & 0xFF
-        hpMax = (txPower >> 8) & 0xFF
-        deviceSel = txPower & 0xFF
-        paLut = 0x01
-        self._setPaConfig(paDutyCycle, hpMax, deviceSel, paLut)
-        self._setTxParams(power, ramp)
+        else : return
+
+        # set power amplifier and TX power configuration
+        self._setPaConfig(paDutyCycle, hpMax, deviceSel, 0x01)
+        self._setTxParams(power, self.PA_RAMP_800U)
 
     def setRxGain(self, rxGain) :
-        gain = self.RX_GAIN_POWER_SAVING
+
+        # set power saving or boosted gain in register
+        gain = self.POWER_SAVING_GAIN
         if rxGain == self.RX_GAIN_BOOSTED :
-            gain = self.RX_GAIN_BOOSTED
+            gain = self.BOOSTED_GAIN
+            # set certain register to retain configuration after wake from sleep mode
             self._writeRegister(self.REG_RX_GAIN, [gain], 1)
             self._writeRegister(0x029F, [0x01, 0x08, 0xAC], 3)
         else :
             self._writeRegister(self.REG_RX_GAIN, [gain], 1)
 
-    def setLoRaModulation(self, sf, bw, cr, ldro=LORA_LDRO_OFF) :
+    def setLoRaModulation(self, sf, bw, cr, ldro=0) :
         self._sf = sf
         self._bw = bw
         self._cr = cr
         self._ldro = ldro
         self._setModulationParamsLoRa(sf, bw, cr, ldro)
 
-    def setLoRaPacket(self, headerType, preambleLength, payloadLength, crcType=LORA_CRC_ON, invertIq=LORA_IQ_STANDARD) :
+    def setLoRaPacket(self, headerType, preambleLength, payloadLength, crcType=CRC_ON, invertIq=IQ_STANDARD) :
         self._headerType = headerType
         self._preambleLength = preambleLength
         self._payloadLength = payloadLength
@@ -527,11 +509,11 @@ class SX126x :
             gpio.output(self._rxen, gpio.LOW)
         self._fixLoRaBw500(self._bw)
 
-    def endPacket(self, timeout=TX_MODE_SINGLE) :
-        self._setPacketParamsLoRa(self._preambleLen, self._headerType, self._payloadTxRx, self._crcType, self._invertIq)
+    def endPacket(self, timeout=TX_SINGLE) :
+        self._setPacketParamsLoRa(self._preambleLength, self._headerType, self._payloadTxRx, self._crcType, self._invertIq)
         self._status = self.STATUS_TX_WAIT
         txTimeout = timeout << 6
-        if txTimeout > 0x00FFFFFF : txTimeout = self.TX_MODE_SINGLE
+        if txTimeout > 0x00FFFFFF : txTimeout = self.TX_SINGLE
         self._setTx(txTimeout)
         self._transmitTime = time.time()
         if self._irq != -1 :
@@ -565,14 +547,14 @@ class SX126x :
         self._bufferIndex = (self._bufferIndex + length) % 256
         self._payloadTxRx += length
 
-    def request(self, timeout=RX_MODE_SINGLE) :
+    def request(self, timeout=RX_SINGLE) :
         self._irqSetup(self.IRQ_RX_DONE | self.IRQ_TIMEOUT | self.IRQ_HEADER_ERR | self.IRQ_CRC_ERR)
         self._status = self.STATUS_RX_WAIT
         rxTimeout = timeout << 6
-        if rxTimeout > 0x00FFFFFF : rxTimeout = self.RX_MODE_SINGLE
-        if timeout == self.RX_MODE_CONTINUOUS :
-            rxTimeout = self.RX_MODE_CONTINUOUS
-            self._status = self.STATUS_RX_CONTINUOUS_WAIT
+        if rxTimeout > 0x00FFFFFF : rxTimeout = self.RX_SINGLE
+        if timeout == self.RX_CONTINUOUS :
+            rxTimeout = self.RX_CONTINUOUS
+            self._status = self.STATUS_RX_CONTINUOUS
         if self._txen != -1 and self._rxen != -1 :
             gpio.output(self._txen, gpio.LOW)
             gpio.output(self._rxen, gpio.HIGH)
@@ -650,7 +632,7 @@ class SX126x :
         self._payloadTxRx = 0
 
     def status(self) :
-        if self._status == self.STATUS_RX_CONTINUOUS_WAIT : return self._statusRxContinuous
+        if self._status == self.STATUS_RX_CONTINUOUS : return self._statusRxContinuous
         if self._irq == -1 : return self._status
         else : return self._getStatusInterrupt()
 
@@ -659,7 +641,7 @@ class SX126x :
         t = time.time()
         while self._getStatusInterrupt() == self._status :
             if self._statusInterrupt != self.STATUS_INT_INIT or (time.time() - t > timeout / 1000 and timeout != 0) : break
-        if self._status == self.STATUS_RX_CONTINUOUS_WAIT :
+        if self._status == self.STATUS_RX_CONTINUOUS :
             self._statusRxContinuous = self._getStatusInterrupt()
             self._statusInterrupt = self.STATUS_INT_INIT
             self._clearIrqStatus(0x03FF)

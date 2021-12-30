@@ -1,15 +1,14 @@
-# import os, sys
-# currentdir = os.path.dirname(os.path.realpath(__file__))
-# parentdir = os.path.dirname(currentdir)
-# sys.path.append(parentdir)
+import os, sys
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
 from LoRaRF import SX126x
 from LoRaRF import LoRaIO
 import time
 
 # Begin LoRa radio and set NSS, reset, busy, IRQ, txen, and rxen pin with connected Raspberry Pi gpio pins
-# IRQ pin must connected to a Raspberry Pi gpio pin for continuous RX mode
 busId = 1; csId = 0
-board = LoRaIO.RPi_GPIO; resetPin = 22; busyPin = 23; irqPin = 24; txenPin = 5; rxenPin = 25
+board = LoRaIO.RPi_GPIO; resetPin = 22; busyPin = 23; irqPin = 26; txenPin = 5; rxenPin = 25
 LoRa = SX126x(busId, csId, LoRaIO.RPi_GPIO, resetPin, busyPin, irqPin, txenPin, rxenPin)
 print("Begin LoRa radio")
 if not LoRa.begin() :
@@ -23,25 +22,22 @@ print("Set RF module to use TCXO as clock reference")
 LoRa.setFrequency(915000000)
 print("Set frequency to 915 Mhz")
 
-# Set RX gain. RX gain option are power saving gain or boosted gain
+# Set RX gain to power saving gain
 LoRa.setRxGain(LoRa.RX_GAIN_POWER_SAVING)
 print("Set RX gain to power saving gain")
 
 # Configure modulation parameter including spreading factor (SF), bandwidth (BW), and coding rate (CR)
-# Receiver must have same SF and BW setting with transmitter to be able to receive LoRa packet
 sf = 7
-bw = LoRa.LORA_BW_125
-cr = LoRa.LORA_CR_4_5
+bw = LoRa.BW_125000
+cr = LoRa.CR_4_5
 LoRa.setLoRaModulation(sf, bw, cr)
 print("Set modulation parameters:\n\tSpreading factor = 7\n\tBandwidth = 125 kHz\n\tCoding rate = 4/5")
 
 # Configure packet parameter including header type, preamble length, payload length, and CRC type
-# The explicit packet includes header contain CR, number of byte, and CRC type
-# Receiver can receive packet with different CR and packet parameters in explicit header mode
-headerType = LoRa.LORA_HEADER_EXPLICIT
+headerType = LoRa.HEADER_EXPLICIT
 preambleLength = 12
 payloadLength = 15
-crcType = LoRa.LORA_CRC_ON
+crcType = LoRa.CRC_ON
 LoRa.setLoRaPacket(headerType, preambleLength, payloadLength, crcType)
 print("Set packet parameters:\n\tExplicit header type\n\tPreamble length = 12\n\tPayload Length = 15\n\tCRC on")
 
@@ -52,7 +48,7 @@ print("Set syncronize word to 0x3444")
 print("\n-- LoRa Receiver Continuous --\n")
 
 # Request for receiving new LoRa packet in RX continuous mode
-LoRa.request(LoRa.RX_MODE_CONTINUOUS)
+LoRa.request(LoRa.RX_CONTINUOUS)
 
 # Receive message continuously
 while True :
@@ -61,10 +57,8 @@ while True :
     LoRa.wait()
 
     # Put received packet to message and counter variable
-    # read() and available() method must be called after request() or listen() method
     length = LoRa.available() - 1
     message = ""
-    # available() method return remaining received payload length and will decrement each read() or get() method called
     while LoRa.available() > 1 :
         message += chr(LoRa.read())
     counter = LoRa.read()

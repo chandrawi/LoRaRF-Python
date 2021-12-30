@@ -8,7 +8,6 @@ import time
 import struct
 
 # Begin LoRa radio and set NSS, reset, busy, IRQ, txen, and rxen pin with connected Raspberry Pi gpio pins
-# IRQ pin not used in this example (set to -1). Set txen and rxen pin to -1 if RF module doesn't have one
 busId = 1; csId = 0
 board = LoRaIO.RPi_GPIO; resetPin = 22; busyPin = 23; irqPin = -1; txenPin = 5; rxenPin = 25
 LoRa = SX126x(busId, csId, LoRaIO.RPi_GPIO, resetPin, busyPin, irqPin, txenPin, rxenPin)
@@ -24,25 +23,22 @@ print("Set RF module to use TCXO as clock reference")
 LoRa.setFrequency(915000000)
 print("Set frequency to 915 Mhz")
 
-# Set RX gain. RX gain option are power saving gain or boosted gain
-LoRa.setRxGain(LoRa.RX_GAIN_POWER_SAVING)
+# Set RX gain to boosted gain
+LoRa.setRxGain(LoRa.RX_GAIN_BOOSTED)
 print("Set RX gain to power saving gain")
 
 # Configure modulation parameter including spreading factor (SF), bandwidth (BW), and coding rate (CR)
-# Receiver must have same SF and BW setting with transmitter to be able to receive LoRa packet
 sf = 7
-bw = LoRa.LORA_BW_125
-cr = LoRa.LORA_CR_4_5
+bw = LoRa.BW_125000
+cr = LoRa.CR_4_5
 LoRa.setLoRaModulation(sf, bw, cr)
 print("Set modulation parameters:\n\tSpreading factor = 7\n\tBandwidth = 125 kHz\n\tCoding rate = 4/5")
 
 # Configure packet parameter including header type, preamble length, payload length, and CRC type
-# The explicit packet includes header contain CR, number of byte, and CRC type
-# Receiver can receive packet with different CR and packet parameters in explicit header mode
-headerType = LoRa.LORA_HEADER_IMPLICIT
+headerType = LoRa.HEADER_EXPLICIT
 preambleLength = 12
 payloadLength = 12
-crcType = LoRa.LORA_CRC_ON
+crcType = LoRa.CRC_ON
 LoRa.setLoRaPacket(headerType, preambleLength, payloadLength, crcType)
 print(f"Set packet parameters:\n\tImplicit header type\n\tPreamble length = 12\n\tPayload Length = 12\n\tCRC on")
 

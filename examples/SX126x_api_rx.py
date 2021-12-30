@@ -20,16 +20,16 @@ rfFrequency = 915000000
 # RX gain setting
 gain = LoRa.RX_GAIN_POWER_SAVING
 # Define modulation parameters setting
-sf = LoRa.LORA_SF_7
-bw = LoRa.LORA_BW_125
-cr = LoRa.LORA_CR_4_5
-ldro = LoRa.LORA_LDRO_OFF
+sf = 7
+bw = LoRa.BW_125000
+cr = LoRa.CR_4_5
+ldro = LoRa.LDRO_OFF
 # Define packet parameters setting
 preambleLength = 0x0C
-headerType = LoRa.LORA_HEADER_EXPLICIT
+headerType = LoRa.HEADER_EXPLICIT
 payloadLength = 0x40
-crcType = LoRa.LORA_CRC_ON
-invertIq = LoRa.LORA_IQ_STANDARD
+crcType = LoRa.CRC_ON
+invertIq = LoRa.IQ_STANDARD
 # SyncWord setting
 sw = [0x34, 0x44]
 # Receive flag
