@@ -282,7 +282,7 @@ class SX126x :
     _status = STATUS_DEFAULT
     _statusRxContinuous = STATUS_DEFAULT
     _statusInterrupt = STATUS_INT_INIT
-    _transmitTime = 0
+    _transmitTime = 0.0
 
 ### COMMON OPERATIONAL METHODS ###
 
@@ -410,31 +410,36 @@ class SX126x :
 ### MODEM, MODULATION PARAMETER, AND PACKET PARAMETER SETUP METHODS ###
 
     def setModem(self, modem) :
+
         self._modem = modem
         self.setStandby(self.STANDBY_RC)
         self.setPacketType(modem)
 
-    def setFrequency(self, frequency) :
+    def setFrequency(self, frequency: int) :
+
+        # perform image calibration before set frequency
         if frequency < 446000000 :
-            calFreqMin = 0x6B
-            calFreqMax = 0x6F
+            calFreqMin = self.CAL_IMG_430
+            calFreqMax = self.CAL_IMG_440
         elif frequency < 734000000 :
-            calFreqMin = 0x75
-            calFreqMax = 0x81
+            calFreqMin = self.CAL_IMG_470
+            calFreqMax = self.CAL_IMG_510
         elif frequency < 828000000 :
-            calFreqMin = 0xC1
-            calFreqMax = 0xC5
+            calFreqMin = self.CAL_IMG_779
+            calFreqMax = self.CAL_IMG_787
         elif frequency < 877000000 :
-            calFreqMin = 0xD7
-            calFreqMax = 0xDB
+            calFreqMin = self.CAL_IMG_863
+            calFreqMax = self.CAL_IMG_870
         else :
-            calFreqMin = 0xE1
-            calFreqMax = 0xE9
-        rfFreq = int(frequency * 33554432 / 32000000)
+            calFreqMin = self.CAL_IMG_902
+            calFreqMax = self.CAL_IMG_928
         self.calibrateImage(calFreqMin, calFreqMax)
+
+        # calculate frequency and set frequency setting
+        rfFreq = int(frequency * 33554432 / 32000000)
         self.setRfFrequency(rfFreq)
 
-    def setTxPower(self, txPower, version = TX_POWER_SX1262) :
+    def setTxPower(self, txPower: int, version = TX_POWER_SX1262) :
 
         #  maximum TX power is 22 dBm and 15 dBm for SX1261
         if txPower > 22 : txPower = 22
@@ -496,33 +501,122 @@ class SX126x :
         else :
             self.writeRegister(self.REG_RX_GAIN, (gain,), 1)
 
-    def setLoRaModulation(self, sf, bw, cr, ldro = 0) :
+    def setLoRaModulation(self, sf: int, bw: int, cr: int, ldro: bool = False) :
+
         self._sf = sf
         self._bw = bw
         self._cr = cr
         self._ldro = ldro
+
+        # valid spreading factor is between 5 and 12
+        if sf > 12 : sf = 12
+        elif sf < 5 : sf = 5
+        # select bandwidth options
+        if bw < 9100 : bw = self.BW_7800
+        elif bw < 13000 : bw = self.BW_10400
+        elif bw < 18200 : bw = self.BW_15600
+        elif bw < 26000 : bw = self.BW_20800
+        elif bw < 36500 : bw = self.BW_31250
+        elif bw < 52100 : bw = self.BW_41700
+        elif bw < 93800 : bw = self.BW_62500
+        elif bw < 187500 : bw = self.BW_125000
+        elif bw < 375000 : bw = self.BW_250000
+        else : bw = self.BW_500000
+        # valid code rate denominator is between 4 and 8
+        cr = cr - 4
+        if cr > 4 : cr = 0
+        # set low data rate option
+        if ldro : ldro = self.LDRO_ON
+        else : ldro = self.LDRO_OFF
+
         self.setModulationParamsLoRa(sf, bw, cr, ldro)
 
-    def setLoRaPacket(self, headerType, preambleLength, payloadLength, crcType = CRC_ON, invertIq = IQ_STANDARD) :
+    def setLoRaPacket(self, headerType, preambleLength: int, payloadLength: int, crcType: bool = False, invertIq: bool = False) :
+
         self._headerType = headerType
         self._preambleLength = preambleLength
         self._payloadLength = payloadLength
         self._crcType = crcType
         self._invertIq = invertIq
+
+        # filter valid header type config
+        if headerType != self.HEADER_IMPLICIT : headerType = self.HEADER_EXPLICIT
+        # set CRC and invert IQ option
+        if crcType : crcType = self.CRC_ON
+        else : crcType = self.CRC_OFF
+        if invertIq : invertIq = self.IQ_INVERTED
+        else : invertIq = self.IQ_STANDARD
+
         self.setPacketParamsLoRa(preambleLength, headerType, payloadLength, crcType, invertIq)
         self._fixInvertedIq(invertIq)
 
-    def setLoRaPayloadLength(self, payloadLength) :
-        self._payloadLength
-        self.setPacketParamsLoRa(self._preambleLength, self._headerType, payloadLength, self._crcType, self._invertIq)
-        self._fixInvertedIq(self._invertIq)
+    def setSpreadingFactor(self, sf: int) :
 
-    def setLoRaSyncWord(self, sw) :
+        self.setLoRaModulation(sf, self._bw, self._cr, self._ldro)
+
+    def setBandwidth(self, bw: int) :
+
+        self.setLoRaModulation(self._sf, bw, self._cr, self._ldro)
+
+    def setCodeRate(self, cr: int) :
+
+        self.setLoRaModulation(self._sf, self._bw, cr, self._ldro)
+
+    def setLdroEnable(self, ldro: bool = True) :
+
+        self.setLoRaModulation(self._sf, self._bw, self._cr, ldro)
+
+    def setHeaderType(self, headerType) :
+
+        self.setLoRaPacket(self._preambleLength, headerType, self._payloadLength, self._crcType, self._invertIq)
+
+    def setPreambleLength(self, preambleLength: int) :
+
+        self.setLoRaPacket(preambleLength, self._headerType, self._payloadLength, self._crcType, self._invertIq)
+
+    def setPayloadLength(self, payloadLength: int) :
+
+        self.setLoRaPacket(self._preambleLength, self._headerType, payloadLength, self._crcType, self._invertIq)
+
+    def setCrcEnable(self, crcType: bool = True) :
+
+        self.setLoRaPacket(self._preambleLength, self._headerType, self._payloadLength, crcType, self._invertIq)
+
+    def setInvertIq(self, invertIq: bool = True) :
+
+        self.setLoRaPacket(self._preambleLength, self._headerType, self._payloadLength, self._crcType, invertIq)
+
+    def setSyncWord(self, sw: int) :
         buf = (
             (sw >> 8) & 0xFF,
             sw & 0xFF
         )
         self.writeRegister(self.REG_LORA_SYNC_WORD_MSB, buf, 2)
+
+    def setFskModulation(self, br: int, pulseShape: int, bandwidth: int, fdev: int) :
+
+        self.setModulationParamsFsk(br, pulseShape, bandwidth, fdev)
+
+    def setFskPacket(self, preambleLength: int, preambleDetector: int, syncWordLength: int, addrComp: int, packetType: int, payloadLength: int, crcType: int, whitening: int) :
+
+        self.setPacketParamsFsk(preambleLength, preambleDetector, syncWordLength, addrComp, packetType, payloadLength, crcType, whitening)
+
+    def setFskSyncWord(self, sw: tuple, swLen: int) :
+
+        self.writeRegister(self.REG_FSK_SYNC_WORD_0, sw, swLen)
+
+    def setFskAddress(self, nodeAddr: int, broadcastAddr: int) :
+
+        self.writeRegister(self.REG_FSK_NODE_ADDRESS, (nodeAddr, broadcastAddr), 2)
+
+    def setFskCrc(self, crcInit: int, crcPolynom: int) :
+
+        buf = (crcInit >> 8, crcInit & 0xFF, crcPolynom >> 8, crcPolynom & 0xFF)
+        self.writeRegister(self.REG_FSK_CRC_INITIAL_MSB, buf, 4)
+
+    def setFskWhitening(self, whitening: int) :
+
+        self.writeRegister(self.REG_FSK_WHITENING_INITIAL_MSB, (whitening >> 8, whitening & 0xFF), 2)
 
 ### TRANSMIT RELATED METHODS ###
 
@@ -668,30 +762,38 @@ class SX126x :
             self._statusInterrupt = self.STATUS_INT_INIT
             self.clearIrqStatus(0x03FF)
 
-    def transmitTime(self) :
-        self.wait()
+    def transmitTime(self) -> float :
+
+        # get transmit time in millisecond (ms)
         return self._transmitTime * 1000
 
-    def dataRate(self) :
-        self.wait()
+    def dataRate(self) -> float :
+
+        # get data rate last transmitted package in kbps
         return self._payloadTxRx / self._transmitTime
 
-    def rssi(self) :
+    def packetRssi(self) -> float :
+
+        # get relative signal strength index (RSSI) of last incoming package
         (rssiPkt, snrPkt, signalRssiPkt) = self.getPacketStatus()
         return rssiPkt / -2.0
 
-    def snr(self) :
+    def snr(self) -> float :
+
+        # get signal to noise ratio (SNR) of last incoming package
         (rssiPkt, snrPkt, signalRssiPkt) = self.getPacketStatus()
         return snrPkt / 4.0
 
-    def signalRssi(self) :
+    def signalRssi(self) -> float :
+
         (rssiPkt, snrPkt, signalRssiPkt) = self.getPacketStatus()
         return signalRssiPkt / -2.0
 
-    def rssiInst(self) :
+    def rssiInst(self) -> float :
+
         return self.getRssiInst() / -2.0
 
-    def getError(self) :
+    def getError(self) -> int :
         error = self.getDeviceErrors()
         self.clearDeviceErrors()
         return error

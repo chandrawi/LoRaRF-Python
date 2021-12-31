@@ -27,8 +27,8 @@ print("Set RX gain to power saving gain")
 
 # Configure modulation parameter including spreading factor (SF), bandwidth (BW), and coding rate (CR)
 sf = 7
-bw = LoRa.BW_125000
-cr = LoRa.CR_4_5
+bw = 125000
+cr = 5
 LoRa.setLoRaModulation(sf, bw, cr)
 print("Set modulation parameters:\n\tSpreading factor = 7\n\tBandwidth = 125 kHz\n\tCoding rate = 4/5")
 
@@ -36,12 +36,12 @@ print("Set modulation parameters:\n\tSpreading factor = 7\n\tBandwidth = 125 kHz
 headerType = LoRa.HEADER_EXPLICIT
 preambleLength = 12
 payloadLength = 15
-crcType = LoRa.CRC_ON
+crcType = True
 LoRa.setLoRaPacket(headerType, preambleLength, payloadLength, crcType)
 print("Set packet parameters:\n\tExplicit header type\n\tPreamble length = 12\n\tPayload Length = 15\n\tCRC on")
 
 # Set syncronize word for public network (0x3444)
-LoRa.setLoRaSyncWord(0x3444)
+LoRa.setSyncWord(0x3444)
 print("Set syncronize word to 0x3444")
 
 print("\n-- LoRa Receiver Continuous --\n")
@@ -66,7 +66,7 @@ while True :
     print(f"{message}  {counter}")
 
     # Print packet/signal status including RSSI, SNR, and signalRSSI
-    print("Packet status: RSSI = {0:0.2f} dBm | SNR = {1:0.2f} dB".format(LoRa.rssi(), LoRa.snr()))
+    print("Packet status: RSSI = {0:0.2f} dBm | SNR = {1:0.2f} dB".format(LoRa.packetRssi(), LoRa.snr()))
 
     # Show received status in case CRC or header error occur
     status = LoRa.status()
