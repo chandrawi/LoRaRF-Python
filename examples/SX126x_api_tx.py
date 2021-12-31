@@ -3,14 +3,14 @@
 # parentdir = os.path.dirname(currentdir)
 # sys.path.append(parentdir)
 from LoRaRF import SX126x
-from LoRaRF import LoRaIO
+import RPi.GPIO
 import time
 
 busId = 1; csId = 0
-board = LoRaIO.RPi_GPIO; resetPin = 22; busyPin = 23; irqPin = 24; txenPin = 5; rxenPin = 25
+resetPin = 22; busyPin = 23; irqPin = 26; txenPin = 5; rxenPin = 25
 
-LoRa = SX126x(busId, csId, LoRaIO.RPi_GPIO, resetPin, busyPin)
-GPIO = LoRaIO.LoRaIO(LoRaIO.DEF_GPIO).GPIO
+LoRa = SX126x()
+GPIO = RPi.GPIO
 
 # TCXO control setting
 dio3Voltage = LoRa.DIO3_OUTPUT_1_8
@@ -45,7 +45,7 @@ def setting() :
     LoRa.setSpi(busId, csId)
     # GPIO Pins setting
     print("Setting pins")
-    LoRa.setPins(LoRaIO.RPi_GPIO, resetPin, busyPin, irqPin, txenPin, rxenPin)
+    LoRa.setPins(resetPin, busyPin, irqPin, txenPin, rxenPin)
     # Reset RF module by setting resetPin to LOW and begin SPI communication
     LoRa.reset()
     # Optionally configure TCXO or XTAL used in RF module

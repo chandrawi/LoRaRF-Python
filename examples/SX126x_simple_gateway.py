@@ -3,16 +3,15 @@
 # parentdir = os.path.dirname(currentdir)
 # sys.path.append(parentdir)
 from LoRaRF import SX126x
-from LoRaRF import LoRaIO
 import time
 import struct
 
 # Begin LoRa radio and set NSS, reset, busy, IRQ, txen, and rxen pin with connected Raspberry Pi gpio pins
 busId = 1; csId = 0
-board = LoRaIO.RPi_GPIO; resetPin = 22; busyPin = 23; irqPin = -1; txenPin = 5; rxenPin = 25
-LoRa = SX126x(busId, csId, LoRaIO.RPi_GPIO, resetPin, busyPin, irqPin, txenPin, rxenPin)
+resetPin = 22; busyPin = 23; irqPin = -1; txenPin = 5; rxenPin = 25
+LoRa = SX126x()
 print("Begin LoRa radio")
-if not LoRa.begin() :
+if not LoRa.begin(busId, csId, resetPin, busyPin, irqPin, txenPin, rxenPin) :
     raise Exception("Something wrong, can't begin LoRa radio")
 
 # Configure LoRa to use TCXO with DIO3 as control

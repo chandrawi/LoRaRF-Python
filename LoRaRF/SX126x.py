@@ -1,9 +1,11 @@
 import spidev
-from . import LoRaIO
+import RPi.GPIO
 import time
 
 spi = spidev.SpiDev()
-gpio = LoRaIO.LoRaIO(LoRaIO.DEF_GPIO).GPIO
+gpio = RPi.GPIO
+gpio.setmode(RPi.GPIO.BCM)
+gpio.setwarnings(False)
 
 class SX126x :
 
@@ -253,7 +255,6 @@ class SX126x :
     # SPI and GPIO pin setting
     _bus = 0
     _cs = 0
-    _gpio = 0
     _reset = -1
     _busy = -1
     _irq = -1
@@ -263,7 +264,7 @@ class SX126x :
     _spiSpeed = 8000000
 
     # LoRa setting
-    _int = 1
+    _dio = 1
     _modem = LORA_MODEM
     _sf = 7
     _bw = BW_125000
@@ -283,109 +284,127 @@ class SX126x :
     _statusInterrupt = STATUS_INT_INIT
     _transmitTime = 0
 
-    def __init__(self, bus, cs, GPIO_lib, reset, busy, irq = -1, txen = -1, rxen = -1) :
-        self._bus = bus
-        self._cs = cs
-        self._gpio = GPIO_lib
-        self._reset = reset
-        self._busy = busy
-        self._irq = irq
-        self._txen = txen
-        self._rxen = rxen
-
 ### COMMON OPERATIONAL METHODS ###
 
-    def begin(self) :
-        self.setSpi(self._bus, self._cs)
-        self.setPins(self._gpio, self._reset, self._busy, self._irq, self._txen, self._rxen)
+    def begin(self, bus: int = _bus, cs: int = _cs, reset: int = _reset, busy: int = _busy, irq: int = _irq, txen: int = _txen, rxen: int = _rxen) :
+
+        # set spi and gpio pins
+        self.setSpi(bus, cs)
+        self.setPins(reset, busy, irq, txen, rxen)
+        # perform device reset
         self.reset()
+
+        # check if device connect and set modem to LoRa
         self.setStandby(self.STANDBY_RC)
-        if self.getMode() != self.STATUS_MODE_STDBY_RC : return False
+        if self.getMode() != self.STATUS_MODE_STDBY_RC :
+            return False
         self.setPacketType(self.LORA_MODEM)
         self._fixResistanceAntenna()
         return True
 
     def end(self) :
+
         self.sleep(self.SLEEP_COLD_START)
         spi.close()
         gpio.cleanup()
 
     def reset(self) :
+
+        # put reset pin to low then wait busy pin to low
         gpio.output(self._reset, gpio.LOW)
         time.sleep(0.001)
         gpio.output(self._reset, gpio.HIGH)
         return not self.busyCheck()
 
     def sleep(self, option = SLEEP_WARM_START) :
+
+        # put device in sleep mode, wait for 500 us to enter sleep mode
+        self.standby()
         self.setSleep(option)
+        time.sleep(0.0005)
 
     def wake(self) :
+
+        # wake device by put device in standby mode
         self.setStandby(self.STANDBY_RC)
         self._fixResistanceAntenna()
 
     def standby(self, option = STANDBY_RC) :
+
         self.setStandby(option)
 
-    def busyCheck(self, timeout = _busyTimeout) :
+    def busyCheck(self, timeout: int = _busyTimeout) :
+
+        # wait for busy pin to LOW or timeout reached
         t = time.time()
         while gpio.input(self._busy) == gpio.HIGH :
             if time.time() - t > timeout / 1000 : return True
         return False
 
     def setFallbackMode(self, fallbackMode) :
+
         self.setRxTxFallbackMode(fallbackMode)
 
-    def getMode(self) :
+    def getMode(self) -> int :
+
         return self.getStatus() & 0x70
 
 ### HARDWARE CONFIGURATION METHODS ###
 
-    def setSpi(self, bus, cs, speed = _spiSpeed) :
+    def setSpi(self, bus: int, cs: int, speed: int = _spiSpeed) :
+
         self._bus = bus
         self._cs = cs
         self._spiSpeed = speed
+        # open spi line and set bus id, chip select, and spi speed
         spi.open(bus, cs)
         spi.max_speed_hz = speed
         spi.lsbfirst = False
         spi.mode = 0
 
-    def setPins(self, GPIO_lib, reset, busy, irq = -1, txen = -1, rxen = -1) :
-        gpio = LoRaIO.LoRaIO(GPIO_lib).GPIO
-        self._gpio = GPIO_lib
+    def setPins(self, reset: int, busy: int, irq: int = -1, txen: int = -1, rxen: int = -1) :
+
         self._reset = reset
         self._busy = busy
         self._irq = irq
         self._txen = txen
         self._rxen = rxen
+        # set pins as input or output
         gpio.setup(reset, gpio.OUT)
         gpio.setup(busy, gpio.IN)
         if irq != -1 : gpio.setup(irq, gpio.IN)
         if txen != -1 : gpio.setup(txen, gpio.OUT)
         if rxen != -1 : gpio.setup(rxen, gpio.OUT)
 
-    def setRfIrqPin(self, dioPinSelect) :
+    def setRfIrqPin(self, dioPinSelect: int) :
+
         if dioPinSelect == 2 or dioPinSelect == 3 : self._dio = dioPinSelect
         else : self._dio = 1
 
-    def setDio2RfSwitch(self, enable = True) :
+    def setDio2RfSwitch(self, enable: bool = True) :
+
         if enable : self.setDio2AsRfSwitchCtrl(self.DIO2_AS_RF_SWITCH)
         else : self.setDio2AsRfSwitchCtrl(self.DIO2_AS_IRQ)
 
     def setDio3TcxoCtrl(self, tcxoVoltage, delayTime) :
+
         self.setDio3AsTcxoCtrl(tcxoVoltage, delayTime)
         self.setStandby(self.STANDBY_RC)
         self.calibrate(0xFF)
 
     def setXtalCap(self, xtalA, xtalB) :
+
         self.setStandby(self.STANDBY_XOSC)
         self.writeRegister(self.REG_XTA_TRIM, (xtalA, xtalB), 2)
         self.setStandby(self.STANDBY_RC)
         self.calibrate(0xFF)
 
     def setRegulator(self, regMode) :
+
         self.setRegulatorMode(regMode)
 
     def setCurrentProtection(self, level) :
+
         self.writeRegister(self.REG_OCP_CONFIGURATION, (level,), 1)
 
 ### MODEM, MODULATION PARAMETER, AND PACKET PARAMETER SETUP METHODS ###
@@ -684,8 +703,8 @@ class SX126x :
         dio1Mask = 0x0000
         dio2Mask = 0x0000
         dio3Mask = 0x0000
-        if self._int == 2 : dio2Mask = irqMask
-        elif self._int == 3 : dio3Mask = irqMask
+        if self._dio == 2 : dio2Mask = irqMask
+        elif self._dio == 3 : dio3Mask = irqMask
         else : dio1Mask = irqMask
         self.setDioIrqParams(irqMask, dio1Mask, dio2Mask, dio3Mask)
 
