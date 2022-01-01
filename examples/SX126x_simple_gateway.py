@@ -1,17 +1,17 @@
-# import os, sys
-# currentdir = os.path.dirname(os.path.realpath(__file__))
-# parentdir = os.path.dirname(currentdir)
-# sys.path.append(parentdir)
+import os, sys
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
 from LoRaRF import SX126x
 import time
 import struct
 
 # Begin LoRa radio and set NSS, reset, busy, IRQ, txen, and rxen pin with connected Raspberry Pi gpio pins
 busId = 1; csId = 0
-resetPin = 22; busyPin = 23; irqPin = -1; txenPin = 5; rxenPin = 25
+resetPin = 22; busyPin = 23; irqPin = -1; txenPin = 5; rxenPin = 25; wakePin = 18
 LoRa = SX126x()
 print("Begin LoRa radio")
-if not LoRa.begin(busId, csId, resetPin, busyPin, irqPin, txenPin, rxenPin) :
+if not LoRa.begin(busId, csId, resetPin, busyPin, irqPin, txenPin, rxenPin, wakePin) :
     raise Exception("Something wrong, can't begin LoRa radio")
 
 # Configure LoRa to use TCXO with DIO3 as control
@@ -28,22 +28,22 @@ print("Set RX gain to power saving gain")
 
 # Configure modulation parameter including spreading factor (SF), bandwidth (BW), and coding rate (CR)
 sf = 7
-bw = LoRa.BW_125000
-cr = LoRa.CR_4_5
+bw = 125000
+cr = 5
 LoRa.setLoRaModulation(sf, bw, cr)
 print("Set modulation parameters:\n\tSpreading factor = 7\n\tBandwidth = 125 kHz\n\tCoding rate = 4/5")
 
 # Configure packet parameter including header type, preamble length, payload length, and CRC type
-headerType = LoRa.HEADER_EXPLICIT
+headerType = LoRa.HEADER_IMPLICIT
 preambleLength = 12
 payloadLength = 12
-crcType = LoRa.CRC_ON
+crcType = True
 LoRa.setLoRaPacket(headerType, preambleLength, payloadLength, crcType)
 print(f"Set packet parameters:\n\tImplicit header type\n\tPreamble length = 12\n\tPayload Length = 12\n\tCRC on")
 
-# Set syncronize word for private network (0x1424)
-LoRa.setLoRaSyncWord(0x1424)
-print("Set syncronize word to 0x1424")
+# Set syncronize word for public network (0x3444)
+LoRa.setSyncWord(0x3444)
+print("Set syncronize word to 0x3444")
 
 print("\n-- LoRa Gateway --\n")
 
@@ -78,7 +78,7 @@ while True :
         print(f"Data          : {structure[4]}")
 
         # Print packet status
-        print("Packet status : RSSI = {0:0.2f} dBm | SNR = {1:0.2f} dB\n".format(LoRa.rssi(), LoRa.snr()))
+        print("Packet status : RSSI = {0:0.2f} dBm | SNR = {1:0.2f} dB\n".format(LoRa.packetRssi(), LoRa.snr()))
 
     else :
 

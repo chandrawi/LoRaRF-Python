@@ -260,8 +260,9 @@ class SX126x :
     _irq = -1
     _txen = -1
     _rxen = -1
+    _wake = -1
     _busyTimeout = 5000
-    _spiSpeed = 8000000
+    _spiSpeed = 7800000
 
     # LoRa setting
     _dio = 1
@@ -283,13 +284,17 @@ class SX126x :
     _statusIrq = STATUS_DEFAULT
     _transmitTime = 0.0
 
+    # callback functions
+    _onTransmit = None
+    _onReceive = None
+
 ### COMMON OPERATIONAL METHODS ###
 
-    def begin(self, bus: int = _bus, cs: int = _cs, reset: int = _reset, busy: int = _busy, irq: int = _irq, txen: int = _txen, rxen: int = _rxen) :
+    def begin(self, bus: int = _bus, cs: int = _cs, reset: int = _reset, busy: int = _busy, irq: int = _irq, txen: int = _txen, rxen: int = _rxen, wake: int = _wake) :
 
         # set spi and gpio pins
         self.setSpi(bus, cs)
-        self.setPins(reset, busy, irq, txen, rxen)
+        self.setPins(reset, busy, irq, txen, rxen, wake)
         # perform device reset
         self.reset()
 
@@ -324,7 +329,11 @@ class SX126x :
 
     def wake(self) :
 
-        # wake device by put device in standby mode
+        # wake device by set wake pin (cs pin) to low before spi transaction and put device in standby mode
+        if (self._wake != -1) :
+            gpio.setup(self._wake, gpio.OUT)
+            gpio.output(self._wake, gpio.LOW)
+            time.sleep(0.0005)
         self.setStandby(self.STANDBY_RC)
         self._fixResistanceAntenna()
 
@@ -337,7 +346,7 @@ class SX126x :
         # wait for busy pin to LOW or timeout reached
         t = time.time()
         while gpio.input(self._busy) == gpio.HIGH :
-            if time.time() - t > timeout / 1000 : return True
+            if (time.time() - t) > (timeout / 1000) : return True
         return False
 
     def setFallbackMode(self, fallbackMode) :
@@ -361,13 +370,14 @@ class SX126x :
         spi.lsbfirst = False
         spi.mode = 0
 
-    def setPins(self, reset: int, busy: int, irq: int = -1, txen: int = -1, rxen: int = -1) :
+    def setPins(self, reset: int, busy: int, irq: int = -1, txen: int = -1, rxen: int = -1, wake: int = -1) :
 
         self._reset = reset
         self._busy = busy
         self._irq = irq
         self._txen = txen
         self._rxen = rxen
+        self._wake = wake
         # set pins as input or output
         gpio.setup(reset, gpio.OUT)
         gpio.setup(busy, gpio.IN)
@@ -631,7 +641,7 @@ class SX126x :
             gpio.output(self._rxen, gpio.LOW)
         self._fixLoRaBw500(self._bw)
 
-    def endPacket(self, timeout: int = TX_SINGLE) -> bool :
+    def endPacket(self, timeout: int = TX_SINGLE, intFlag: bool = True) -> bool :
 
         # skip to enter TX mode when previous TX operation incomplete
         if self.getMode == self.STATUS_MODE_TX : return False
@@ -651,6 +661,12 @@ class SX126x :
         # set device to transmit mode with configured timeout or single operation
         self.setTx(txTimeout)
         self._transmitTime = time.time()
+
+        # set operation status to wait and attach TX interrupt handler
+        if self._irq != -1 and intFlag :
+            gpio.remove_event_detect(self._irq)
+            gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptTx, bouncetime=10)
+        return True
 
     def write(self, data, length: int = 0) :
 
@@ -681,7 +697,7 @@ class SX126x :
 
 ### RECEIVE RELATED METHODS ###
 
-    def request(self, timeout: int = RX_SINGLE) -> bool :
+    def request(self, timeout: int = RX_SINGLE, intFlag: bool = True) -> bool :
 
         # skip to enter RX mode when previous RX operation incomplete
         if self.getMode() == self.STATUS_MODE_RX : return False
@@ -707,7 +723,16 @@ class SX126x :
         # set device to receive mode with configured timeout, single, or continuous operation
         self.setRx(rxTimeout)
 
-    def listen(self, rxPeriod: int, sleepPeriod: int) -> bool :
+        # set operation status to wait and attach RX interrupt handler
+        if self._irq != -1 and intFlag :
+            gpio.remove_event_detect(self._irq)
+            if timeout == self.RX_CONTINUOUS :
+                gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRxContinuous, bouncetime=10)
+            else :
+                gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=10)
+        return True
+
+    def listen(self, rxPeriod: int, sleepPeriod: int, intFlag: bool = True) -> bool :
 
         # skip to enter RX mode when previous RX operation incomplete
         if self.getMode() == self.STATUS_MODE_RX : return False
@@ -732,6 +757,12 @@ class SX126x :
         # set device to receive mode with configured receive and sleep period
         self.setRxDutyCycle(rxPeriod, sleepPeriod)
 
+        # set operation status to wait and attach RX interrupt handler
+        if self._irq != -1 and intFlag :
+            gpio.remove_event_detect(self._irq)
+            gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=10)
+        return True
+
     def available(self) -> int :
 
         # get size of package still available to read
@@ -751,11 +782,11 @@ class SX126x :
             self._payloadTxRx -= length
         else :
             self._payloadTxRx = 0
-        # return single bytes or tuple
+        # return single byte or tuple
         if single : return buf[0]
         else : return buf
 
-    def get(self, length: int = 1) :
+    def get(self, length: int = 1) -> bytes :
 
         # read data from buffer and update buffer index and payload
         buf = self.readBuffer(self._bufferIndex, length)
@@ -853,6 +884,7 @@ class SX126x :
 
         # get signal to noise ratio (SNR) of last incoming package
         (rssiPkt, snrPkt, signalRssiPkt) = self.getPacketStatus()
+        if snrPkt > 127 : snrPkt = snrPkt - 256
         return snrPkt / 4.0
 
     def signalRssi(self) -> float :
@@ -885,15 +917,54 @@ class SX126x :
         self.setDioIrqParams(irqMask, dio1Mask, dio2Mask, dio3Mask)
 
     def _interruptTx(self, channel) :
+
+        # calculate transmit time
         self._transmitTime = time.time() - self._transmitTime
+        # set back txen pin to low
         if self._txen != -1 : gpio.output(self._txen, gpio.LOW)
-        self._statusInterrupt = self.STATUS_INT_TX
+        # store IRQ status
+        self._statusIrq = self.getIrqStatus()
+
+        # call onTransmit function
+        if callable(self._onTransmit) :
+            self._onTransmit()
 
     def _interruptRx(self, channel) :
-        (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
+
+        # set back rxen pin to low
         if self._rxen != -1 : gpio.output(self._rxen, gpio.LOW)
-        self._statusInterrupt = self.STATUS_INT_RX
         self._fixRxTimeout()
+        # store IRQ status
+        self._statusIrq = self.getIrqStatus()
+        # get received payload length and buffer index
+        (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
+
+        # call onReceive function
+        if callable(self._onReceive) :
+            self._onReceive()
+
+    def _interruptRxContinuous(self, channel) :
+
+        # store IRQ status
+        self._statusIrq = self.getIrqStatus()
+        # clear IRQ status
+        self.clearIrqStatus(0x03FF)
+        # get received payload length and buffer index
+        (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
+
+        # call onReceive function
+        if callable(self._onReceive) :
+            self._onReceive()
+
+    def onTransmit(self, callback) :
+
+        # register onTransmit function to call every transmit done
+        self._onTransmit = callback
+
+    def onReceive(self, callback) :
+
+        # register onReceive function to call every receive done
+        self._onReceive = callback
 
 ### SX126X API: OPERATIONAL MODES COMMANDS ###
 

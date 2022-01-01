@@ -7,7 +7,7 @@ import time
 
 # Begin LoRa radio and set NSS, reset, busy, IRQ, txen, and rxen pin with connected Raspberry Pi gpio pins
 busId = 1; csId = 0
-resetPin = 22; busyPin = 23; irqPin = -1; txenPin = 5; rxenPin = 25
+resetPin = 22; busyPin = 23; irqPin = 26; txenPin = 5; rxenPin = 25
 LoRa = SX126x()
 print("Begin LoRa radio")
 if not LoRa.begin(busId, csId, resetPin, busyPin, irqPin, txenPin, rxenPin) :
@@ -52,22 +52,22 @@ LoRa.request(LoRa.RX_CONTINUOUS)
 # Receive message continuously
 while True :
 
-    # Wait for incoming LoRa packet
-    LoRa.wait()
+    # Check for incoming LoRa packet
+    if LoRa.available() :
 
-    # Put received packet to message and counter variable
-    message = ""
-    while LoRa.available() > 1 :
-        message += chr(LoRa.read())
-    counter = LoRa.read()
+        # Put received packet to message and counter variable
+        message = ""
+        while LoRa.available() > 1 :
+            message += chr(LoRa.read())
+        counter = LoRa.read()
 
-    # Print received message and counter in serial
-    print(f"{message}  {counter}")
+        # Print received message and counter in serial
+        print(f"{message}  {counter}")
 
-    # Print packet/signal status including RSSI, SNR, and signalRSSI
-    print("Packet status: RSSI = {0:0.2f} dBm | SNR = {1:0.2f} dB".format(LoRa.packetRssi(), LoRa.snr()))
+        # Print packet/signal status including RSSI, SNR, and signalRSSI
+        print("Packet status: RSSI = {0:0.2f} dBm | SNR = {1:0.2f} dB".format(LoRa.packetRssi(), LoRa.snr()))
 
-    # Show received status in case CRC or header error occur
-    status = LoRa.status()
-    if status == LoRa.STATUS_CRC_ERR : print("CRC error")
-    if status == LoRa.STATUS_HEADER_ERR : print("Packet header error")
+        # Show received status in case CRC or header error occur
+        status = LoRa.status()
+        if status == LoRa.STATUS_CRC_ERR : print("CRC error")
+        if status == LoRa.STATUS_HEADER_ERR : print("Packet header error")
