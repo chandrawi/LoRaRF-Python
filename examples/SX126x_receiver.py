@@ -55,10 +55,11 @@ while True :
 
     # Request for receiving new LoRa packet
     LoRa.request()
+    # Wait for incoming LoRa packet
+    LoRa.wait()
 
     # Put received packet to message and counter variable
     # read() and available() method must be called after request() or listen() method
-    length = LoRa.available() - 1
     message = ""
     # available() method return remaining received payload length and will decrement each read() or get() method called
     while LoRa.available() > 1 :
@@ -74,4 +75,4 @@ while True :
     # Show received status in case CRC or header error occur
     status = LoRa.status()
     if status == LoRa.STATUS_CRC_ERR : print("CRC error")
-    if status == LoRa.STATUS_HEADER_ERR : print("Packet header error")
+    elif status == LoRa.STATUS_HEADER_ERR : print("Packet header error")

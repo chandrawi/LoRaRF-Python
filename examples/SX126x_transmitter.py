@@ -70,6 +70,9 @@ while True :
     # Print message and counter
     print(f"{message}  {counter}")
 
+    # Wait until modulation process for transmitting packet finish
+    LoRa.wait()
+
     # Print transmit time and data rate
     print("Transmit time: {0:0.2f} ms | Data rate: {1:0.2f} byte/s".format(LoRa.transmitTime(), LoRa.dataRate()))
 

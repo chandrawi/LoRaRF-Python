@@ -279,9 +279,8 @@ class SX126x :
     # Operation properties
     _bufferIndex = 0
     _payloadTxRx = 32
-    _status = STATUS_DEFAULT
-    _statusRxContinuous = STATUS_DEFAULT
-    _statusInterrupt = STATUS_INT_INIT
+    _statusWait = STATUS_DEFAULT
+    _statusIrq = STATUS_DEFAULT
     _transmitTime = 0.0
 
 ### COMMON OPERATIONAL METHODS ###
@@ -621,146 +620,218 @@ class SX126x :
 ### TRANSMIT RELATED METHODS ###
 
     def beginPacket(self) :
-        self._irqSetup(self.IRQ_TX_DONE | self.IRQ_TIMEOUT)
+
+        # reset payload length and buffer index
         self._payloadTxRx = 0
         self.setBufferBaseAddress(self._bufferIndex, (self._bufferIndex + 0xFF) % 0xFF)
+
+        # set txen pin to low and rxen pin to high
         if self._txen != -1 and self._rxen != -1 :
             gpio.output(self._txen, gpio.HIGH)
             gpio.output(self._rxen, gpio.LOW)
         self._fixLoRaBw500(self._bw)
 
-    def endPacket(self, timeout = TX_SINGLE) :
+    def endPacket(self, timeout: int = TX_SINGLE) -> bool :
+
+        # skip to enter TX mode when previous TX operation incomplete
+        if self.getMode == self.STATUS_MODE_TX : return False
+
+        # clear previous interrupt and set TX done, and TX timeout as interrupt source
+        self._irqSetup(self.IRQ_TX_DONE | self.IRQ_TIMEOUT)
+        # set packet payload length
         self.setPacketParamsLoRa(self._preambleLength, self._headerType, self._payloadTxRx, self._crcType, self._invertIq)
-        self._status = self.STATUS_TX_WAIT
+
+        # set status to TX wait
+        self._statusWait = self.STATUS_TX_WAIT
+        self._statusIrq = 0x0000
+        # calculate TX timeout config
         txTimeout = timeout << 6
         if txTimeout > 0x00FFFFFF : txTimeout = self.TX_SINGLE
+
+        # set device to transmit mode with configured timeout or single operation
         self.setTx(txTimeout)
         self._transmitTime = time.time()
-        if self._irq != -1 :
-            self._statusInterrupt = self.STATUS_INT_INIT
-            gpio.remove_event_detect(self._irq)
-            gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptTx, bouncetime=100)
-        else :
-            irqStat = self._waitIrq(timeout)
-            self._transmitTime = time.time() - self._transmitTime
-            if self._txen != -1 : gpio.output(self._txen, gpio.LOW)
-            if irqStat & self.IRQ_TIMEOUT : self._status = self.STATUS_TX_TIMEOUT
-            else : self._status = self.STATUS_TX_DONE
 
-    def write(self, data, length = 0) :
+    def write(self, data, length: int = 0) :
+
+        # prepare data and data length to be transmitted
         if type(data) is list or type(data) is tuple :
             if length == 0 or length > len(data) : length = len(data)
         elif type(data) is int or type(data) is float :
             length = 1
             data = (int(data),)
-        else : raise TypeError("input data must be list, tuple, integer or float")
+        else :
+            raise TypeError("input data must be list, tuple, integer or float")
+        # write data to buffer and update buffer index and payload
         self.writeBuffer(self._bufferIndex, data, length)
         self._bufferIndex = (self._bufferIndex + length) % 256
         self._payloadTxRx += length
 
     def put(self, data) :
+
+        # prepare bytes or bytearray to be transmitted
         if type(data) is bytes or type(data) is bytearray :
             dataList = tuple(data)
             length = len(dataList)
         else : raise TypeError("input data must be bytes or bytearray")
+        # write data to buffer and update buffer index and payload
         self.writeBuffer(self._bufferIndex, dataList, length)
         self._bufferIndex = (self._bufferIndex + length) % 256
         self._payloadTxRx += length
 
 ### RECEIVE RELATED METHODS ###
 
-    def request(self, timeout = RX_SINGLE) :
+    def request(self, timeout: int = RX_SINGLE) -> bool :
+
+        # skip to enter RX mode when previous RX operation incomplete
+        if self.getMode() == self.STATUS_MODE_RX : return False
+
+        # clear previous interrupt and set RX done, RX timeout, header error, and CRC error as interrupt source
         self._irqSetup(self.IRQ_RX_DONE | self.IRQ_TIMEOUT | self.IRQ_HEADER_ERR | self.IRQ_CRC_ERR)
-        self._status = self.STATUS_RX_WAIT
+
+        # set status to RX wait or RX continuous wait
+        self._statusWait = self.STATUS_RX_WAIT
+        self._statusIrq = 0x0000
+        # calculate RX timeout config
         rxTimeout = timeout << 6
         if rxTimeout > 0x00FFFFFF : rxTimeout = self.RX_SINGLE
         if timeout == self.RX_CONTINUOUS :
             rxTimeout = self.RX_CONTINUOUS
-            self._status = self.STATUS_RX_CONTINUOUS
+            self._statusWait = self.STATUS_RX_CONTINUOUS
+
+        # set txen pin to low and rxen pin to high
         if self._txen != -1 and self._rxen != -1 :
             gpio.output(self._txen, gpio.LOW)
             gpio.output(self._rxen, gpio.HIGH)
-        self.setRx(rxTimeout)
-        if self._irq != -1 :
-            self._statusInterrupt = self.STATUS_INT_INIT
-            gpio.remove_event_detect(self._irq)
-            gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=100)
-        else :
-            irqStat = self._waitIrq(timeout)
-            (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
-            if self._rxen != -1 : gpio.output(self._rxen, gpio.LOW)
-            if irqStat & self.IRQ_TIMEOUT : self._status = self.STATUS_RX_TIMEOUT
-            elif irqStat & self.IRQ_HEADER_ERR : self._status = self.STATUS_HEADER_ERR
-            elif irqStat & self.IRQ_CRC_ERR : self._status = self.STATUS_CRC_ERR
-            else : self._status = self.STATUS_RX_DONE
-            self._fixRxTimeout()
 
-    def listen(self, rxPeriod, sleepPeriod) :
+        # set device to receive mode with configured timeout, single, or continuous operation
+        self.setRx(rxTimeout)
+
+    def listen(self, rxPeriod: int, sleepPeriod: int) -> bool :
+
+        # skip to enter RX mode when previous RX operation incomplete
+        if self.getMode() == self.STATUS_MODE_RX : return False
+
+        # clear previous interrupt and set RX done, RX timeout, header error, and CRC error as interrupt source
         self._irqSetup(self.IRQ_RX_DONE | self.IRQ_TIMEOUT | self.IRQ_HEADER_ERR | self.IRQ_CRC_ERR)
-        self._status = self.STATUS_RX_WAIT
-        timeout = rxPeriod
+
+        # set status to RX wait or RX continuous wait
+        self._statusWait = self.STATUS_RX_WAIT
+        self._statusIrq = 0x0000
+        # calculate RX period and sleep period config
         rxPeriod = rxPeriod << 6
         sleepPeriod = sleepPeriod << 6
         if rxPeriod > 0x00FFFFFF : rxPeriod = 0x00FFFFFF
         if sleepPeriod > 0x00FFFFFF : sleepPeriod = 0x00FFFFFF
+
+        # set txen pin to low and rxen pin to high
         if self._txen != -1 and self._rxen != -1 :
             gpio.output(self._txen, gpio.LOW)
             gpio.output(self._rxen, gpio.HIGH)
-        self.setRxDutyCycle(rxPeriod, sleepPeriod)
-        if self._irq != -1 :
-            self._statusInterrupt = self.STATUS_INT_INIT
-            gpio.remove_event_detect(self._irq)
-            gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=100)
-        else :
-            irqStat = self._waitIrq(timeout)
-            (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
-            if self._rxen != -1 : gpio.output(self._rxen, gpio.LOW)
-            if irqStat & self.IRQ_TIMEOUT : self._status = self.STATUS_RX_TIMEOUT
-            elif irqStat & self.IRQ_HEADER_ERR : self._status = self.STATUS_HEADER_ERR
-            elif irqStat & self.IRQ_CRC_ERR : self._status = self.STATUS_CRC_ERR
-            else : self._status = self.STATUS_RX_DONE
-            self._fixRxTimeout()
 
-    def available(self) :
+        # set device to receive mode with configured receive and sleep period
+        self.setRxDutyCycle(rxPeriod, sleepPeriod)
+
+    def available(self) -> int :
+
+        # get size of package still available to read
         return self._payloadTxRx
 
-    def read(self, length = 0) :
+    def read(self, length: int = 0) :
+
+        # single or multiple bytes read
         single = False
-        if length == 0 : length = 1; single = True
+        if length == 0 :
+            length = 1
+            single = True
+        # read data from buffer and update buffer index and payload
         buf = self.readBuffer(self._bufferIndex, length)
         self._bufferIndex = (self._bufferIndex + length) % 256
-        if self._payloadTxRx > length : self._payloadTxRx -= length
-        else : self._payloadTxRx = 0
+        if self._payloadTxRx > length :
+            self._payloadTxRx -= length
+        else :
+            self._payloadTxRx = 0
+        # return single bytes or tuple
         if single : return buf[0]
         else : return buf
 
-    def get(self, length = 1) :
+    def get(self, length: int = 1) :
+
+        # read data from buffer and update buffer index and payload
         buf = self.readBuffer(self._bufferIndex, length)
         self._bufferIndex = (self._bufferIndex + length) % 256
-        if self._payloadTxRx > length : self._payloadTxRx -= length
-        else : self._payloadTxRx = 0
+        if self._payloadTxRx > length :
+            self._payloadTxRx -= length
+        else :
+            self._payloadTxRx = 0
+        # return array of bytes
         return bytes(buf)
 
-    def flush(self) :
+    def purge(self, length: int = 0) :
+
+        # subtract or reset received payload length
+        if self._bufferIndex > length :
+            self._payloadTxRx = self._payloadTxRx - length
+        else :
+            self._payloadTxRx = 0
         self._bufferIndex += self._payloadTxRx
-        self._payloadTxRx = 0
 
 ### WAIT, OPERATION STATUS, AND PACKET STATUS METHODS ###
 
-    def status(self) :
-        if self._status == self.STATUS_RX_CONTINUOUS : return self._statusRxContinuous
-        if self._irq == -1 : return self._status
-        else : return self._getStatusInterrupt()
+    def wait(self, timeout: int = 0) -> bool :
 
-    def wait(self, timeout = 0) :
-        if self._irq == -1 : return
+        # immediately return when currently not waiting transmit or receive process
+        if self._statusIrq != 0x0000 :
+            return False
+        # wait transmit or receive process finish by checking IRQ status
+        irqStat = 0x0000
         t = time.time()
-        while self._getStatusInterrupt() == self._status :
-            if self._statusInterrupt != self.STATUS_INT_INIT or (time.time() - t > timeout / 1000 and timeout != 0) : break
-        if self._status == self.STATUS_RX_CONTINUOUS :
-            self._statusRxContinuous = self._getStatusInterrupt()
-            self._statusInterrupt = self.STATUS_INT_INIT
+        while irqStat == 0x0000 and self._statusIrq == 0x0000 :
+            irqStat = self.getIrqStatus()
+            # return when timeout reached
+            if (time.time() - t) > timeout and timeout > 0 : return False
+        
+        if self._statusIrq :
+            # immediately return when interrupt signal hit
+            return False
+        elif self._statusWait == self.STATUS_TX_WAIT :
+            # for transmit, calculate transmit time and set back txen pin to low
+            self._transmitTime = time.time() - self._transmitTime
+            if self._txen != -1 :
+                gpio.output(self._txen, gpio.LOW)
+        elif self._statusWait == self.STATUS_RX_WAIT :
+            # for receive, get received payload length and buffer index and set back rxen pin to low
+            (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
+            if self._rxen != -1 :
+                gpio.output(self._rxen, gpio.LOW)
+            self._fixRxTimeout()
+        elif self._statusWait == self.STATUS_RX_CONTINUOUS :
+            # for receive continuous, get received payload length and buffer index and clear IRQ status
+            (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
             self.clearIrqStatus(0x03FF)
+        
+        # store IRQ status
+        self._statusIrq = irqStat
+        return True
+
+    def status(self) -> int :
+
+        # set back status IRQ for RX continuous operation
+        statusIrq = self._statusIrq
+        if self._statusWait == self.STATUS_RX_CONTINUOUS :
+            self._statusIrq = 0x0000
+
+        # get status for transmit and receive operation based on status IRQ
+        if statusIrq & self.IRQ_TIMEOUT :
+            if self._statusWait == self.STATUS_TX_WAIT : return self.STATUS_TX_TIMEOUT
+            else : return self.STATUS_RX_TIMEOUT
+        elif statusIrq & self.IRQ_HEADER_ERR : return self.STATUS_HEADER_ERR
+        elif statusIrq & self.IRQ_CRC_ERR : return self.STATUS_CRC_ERR
+        elif statusIrq & self.IRQ_TX_DONE : return self.STATUS_TX_DONE
+        elif statusIrq & self.IRQ_RX_DONE : return self.STATUS_RX_DONE
+
+        # return TX or RX wait status
+        return self._statusWait
 
     def transmitTime(self) -> float :
 
@@ -801,7 +872,10 @@ class SX126x :
 ### INTERRUPT HANDLER METHODS ###
 
     def _irqSetup(self, irqMask) :
+
+        # clear IRQ status of previous transmit or receive operation
         self.clearIrqStatus(0x03FF)
+        # set selected interrupt source
         dio1Mask = 0x0000
         dio2Mask = 0x0000
         dio3Mask = 0x0000
@@ -809,14 +883,6 @@ class SX126x :
         elif self._dio == 3 : dio3Mask = irqMask
         else : dio1Mask = irqMask
         self.setDioIrqParams(irqMask, dio1Mask, dio2Mask, dio3Mask)
-
-    def _waitIrq(self, timeout = 0) :
-        irqStat = 0x0000
-        t = time.time()
-        while irqStat == 0x0000 :
-            irqStat = self.getIrqStatus()
-            if time.time() - t > timeout / 1000 and timeout != 0 : break
-        return irqStat
 
     def _interruptTx(self, channel) :
         self._transmitTime = time.time() - self._transmitTime
@@ -828,18 +894,6 @@ class SX126x :
         if self._rxen != -1 : gpio.output(self._rxen, gpio.LOW)
         self._statusInterrupt = self.STATUS_INT_RX
         self._fixRxTimeout()
-
-    def _getStatusInterrupt(self) :
-        irqStat = self.getIrqStatus()
-        if self._statusInterrupt == self.STATUS_INT_TX :
-            if irqStat[0] & self.IRQ_TIMEOUT : return self.STATUS_TX_TIMEOUT
-            else : return self.STATUS_TX_DONE
-        elif self._statusInterrupt == self.STATUS_INT_RX :
-            if irqStat[0] & self.IRQ_TIMEOUT : return self.STATUS_RX_TIMEOUT
-            elif irqStat[0] & self.IRQ_HEADER_ERR : return self.STATUS_HEADER_ERR
-            elif irqStat[0] & self.IRQ_CRC_ERR : return self.STATUS_CRC_ERR
-            else : return self.STATUS_RX_DONE
-        else : return self._status
 
 ### SX126X API: OPERATIONAL MODES COMMANDS ###
 

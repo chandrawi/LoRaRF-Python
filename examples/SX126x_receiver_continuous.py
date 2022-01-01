@@ -56,7 +56,6 @@ while True :
     LoRa.wait()
 
     # Put received packet to message and counter variable
-    length = LoRa.available() - 1
     message = ""
     while LoRa.available() > 1 :
         message += chr(LoRa.read())
