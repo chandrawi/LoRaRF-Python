@@ -6,8 +6,8 @@ from LoRaRF import SX126x
 import time
 
 # Begin LoRa radio and set NSS, reset, busy, IRQ, txen, and rxen pin with connected Raspberry Pi gpio pins
-busId = 1; csId = 0
-resetPin = 22; busyPin = 23; irqPin = 26; txenPin = 5; rxenPin = 25
+busId = 1; csId = 1
+resetPin = 27; busyPin = 24; irqPin = 13; txenPin = 5; rxenPin = 25
 LoRa = SX126x()
 print("Begin LoRa radio")
 if not LoRa.begin(busId, csId, resetPin, busyPin, irqPin, txenPin, rxenPin) :

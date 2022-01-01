@@ -1,13 +1,13 @@
-# import os, sys
-# currentdir = os.path.dirname(os.path.realpath(__file__))
-# parentdir = os.path.dirname(currentdir)
-# sys.path.append(parentdir)
+import os, sys
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
 from LoRaRF import SX126x
 import RPi.GPIO
 import time
 
-busId = 1; csId = 0
-resetPin = 22; busyPin = 23; irqPin = 26; txenPin = 5; rxenPin = 25
+busId = 1; csId = 1
+resetPin = 27; busyPin = 24; irqPin = 13; txenPin = 5; rxenPin = 25
 
 LoRa = SX126x()
 GPIO = RPi.GPIO
@@ -50,28 +50,28 @@ def setting() :
     LoRa.reset()
     # Optionally configure TCXO or XTAL used in RF module
     print("Set RF module to use TCXO as clock reference")
-    LoRa._setDio3AsTcxoCtrl(dio3Voltage, tcxoDelay)
+    LoRa.setDio3AsTcxoCtrl(dio3Voltage, tcxoDelay)
     # Set to standby mode and set packet type to LoRa
     print("Going to standby mode")
-    LoRa._setStandby(LoRa.STANDBY_RC)
+    LoRa.setStandby(LoRa.STANDBY_RC)
     print("Set packet type to LoRa")
-    LoRa._setPacketType(LoRa.LORA_MODEM)
+    LoRa.setPacketType(LoRa.LORA_MODEM)
     # Set frequency to selected frequency (rfFrequency = rfFreq * 32000000 / 2 ^ 25)
     print(f"Set frequency to {rfFrequency/1000000} Mhz")
     rfFreq = int(rfFrequency * 33554432 / 32000000)
-    LoRa._setRfFrequency(rfFreq)
+    LoRa.setRfFrequency(rfFreq)
     # Set tx power to selected TX power
     print(f"Set TX power to {power} dBm")
-    LoRa._setPaConfig(paDutyCycle, hpMax, deviceSel, 0x01)
-    LoRa._setTxParams(power, LoRa.PA_RAMP_200U)
+    LoRa.setPaConfig(paDutyCycle, hpMax, deviceSel, 0x01)
+    LoRa.setTxParams(power, LoRa.PA_RAMP_200U)
     # Configure modulation parameter with predefined spreading factor, bandwidth, coding rate, and low data rate optimize setting
     print("Set modulation with predefined parameters")
-    LoRa._setModulationParamsLoRa(sf, bw, cr, ldro)
+    LoRa.setModulationParamsLoRa(sf, bw, cr, ldro)
     # Configure packet parameter with predefined preamble length, header mode type, payload length, crc type, and invert iq option
-    LoRa._setPacketParamsLoRa(preambleLength, headerType, payloadLength, crcType, invertIq)
+    LoRa.setPacketParamsLoRa(preambleLength, headerType, payloadLength, crcType, invertIq)
     # Set predefined syncronize word
     print("Set syncWord to 0x{0:02X}{1:02X}".format(sw[0], sw[1]))
-    LoRa._writeRegister(LoRa.REG_LORA_SYNC_WORD_MSB, sw, 2)
+    LoRa.writeRegister(LoRa.REG_LORA_SYNC_WORD_MSB, sw, 2)
 
 def checkTransmitDone(channel) :
     global transmitted
@@ -81,25 +81,25 @@ def transmit(message, timeout) :
     print("\n-- TRANSMIT FUNCTION --")
     # Set buffer base address
     print("Mark a pointer in buffer for transmit message")
-    LoRa._setBufferBaseAddress(0x00, 0x80)
+    LoRa.setBufferBaseAddress(0x00, 0x80)
     # Write the message to buffer
     length = len(message)
     messageString = ""
     for i in range(len(message)) : messageString += chr(message[i])
     print(f"Write message \"{messageString}\" in buffer")
-    LoRa._writeBuffer(0x00, message, length)
+    LoRa.writeBuffer(0x00, message, length)
     # Set payload length same as message length
     print(f"Set payload length same as message length ({length})")
-    LoRa._setPacketParamsLoRa(preambleLength, headerType, length, crcType, invertIq)
+    LoRa.setPacketParamsLoRa(preambleLength, headerType, length, crcType, invertIq)
     # Activate interrupt when transmit done on DIO1
     print("Set TX done and timeout IRQ on DIO1")
     mask = LoRa.IRQ_TX_DONE | LoRa.IRQ_TIMEOUT
-    LoRa._setDioIrqParams(mask, mask, LoRa.IRQ_NONE, LoRa.IRQ_NONE)
+    LoRa.setDioIrqParams(mask, mask, LoRa.IRQ_NONE, LoRa.IRQ_NONE)
     # Calculate timeout (timeout duration = timeout * 15.625 us)
     tOut = timeout * 64
     # Set RF module to TX mode to transmit message
     print("Transmitting LoRa packet")
-    LoRa._setTx(tOut)
+    LoRa.setTx(tOut)
     tStart = time.time()
     tTrans = 0
     # Attach irqPin to DIO1
@@ -123,13 +123,12 @@ def transmit(message, timeout) :
     # Display transmit time
     print(f"Transmit time = {tTrans*1000} ms")
     # Clear the interrupt status
-    irqStat = []
-    LoRa._getIrqStatus(irqStat)
+    irqStat = LoRa.getIrqStatus()
     print("Clear IRQ status")
-    LoRa._clearIrqStatus(irqStat[0])
+    LoRa.clearIrqStatus(irqStat)
     GPIO.output(txenPin, GPIO.LOW)
     # Return interrupt status
-    return irqStat[0]
+    return irqStat
 
 # Seetings for LoRa communication
 setting()

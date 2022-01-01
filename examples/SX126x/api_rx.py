@@ -1,7 +1,7 @@
-# import os, sys
-# currentdir = os.path.dirname(os.path.realpath(__file__))
-# parentdir = os.path.dirname(currentdir)
-# sys.path.append(parentdir)
+import os, sys
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
 from LoRaRF import SX126x
 import RPi.GPIO
 import time
@@ -47,29 +47,29 @@ def setting() :
     LoRa.reset()
     # Optionally configure TCXO or XTAL used in RF module
     print("Set RF module to use TCXO as clock reference")
-    LoRa._setDio3AsTcxoCtrl(dio3Voltage, tcxoDelay)
+    LoRa.setDio3AsTcxoCtrl(dio3Voltage, tcxoDelay)
     # Set to standby mode and set packet type to LoRa
     print("Going to standby mode")
-    LoRa._setStandby(LoRa.STANDBY_RC)
+    LoRa.setStandby(LoRa.STANDBY_RC)
     print("Set packet type to LoRa")
-    LoRa._setPacketType(LoRa.LORA_MODEM)
+    LoRa.setPacketType(LoRa.LORA_MODEM)
     # Set frequency to selected frequency (rfFrequency = rfFreq * 32000000 / 2 ^ 25)
     print(f"Set frequency to {rfFrequency/1000000} Mhz")
     rfFreq = int(rfFrequency * 33554432 / 32000000)
-    LoRa._setRfFrequency(rfFreq)
+    LoRa.setRfFrequency(rfFreq)
     # Set rx gain to selected gain
     if gain == LoRa.RX_GAIN_BOOSTED : gainMsg = "boosted gain"
     else : gainMsg = "power saving gain"
     print(f"Set RX gain to {gainMsg} dBm")
-    LoRa._writeRegister(LoRa.REG_RX_GAIN, [gain], 1)
+    LoRa.writeRegister(LoRa.REG_RX_GAIN, [gain], 1)
     # Configure modulation parameter with predefined spreading factor, bandwidth, coding rate, and low data rate optimize setting
     print("Set modulation with predefined parameters")
-    LoRa._setModulationParamsLoRa(sf, bw, cr, ldro)
+    LoRa.setModulationParamsLoRa(sf, bw, cr, ldro)
     # Configure packet parameter with predefined preamble length, header mode type, payload length, crc type, and invert iq option
-    LoRa._setPacketParamsLoRa(preambleLength, headerType, payloadLength, crcType, invertIq)
+    LoRa.setPacketParamsLoRa(preambleLength, headerType, payloadLength, crcType, invertIq)
     # Set predefined syncronize word
     print("Set syncWord to 0x{0:02X}{1:02X}".format(sw[0], sw[1]))
-    LoRa._writeRegister(LoRa.REG_LORA_SYNC_WORD_MSB, sw, 2)
+    LoRa.writeRegister(LoRa.REG_LORA_SYNC_WORD_MSB, sw, 2)
 
 def checkReceiveDone(channel) :
     global received
@@ -80,12 +80,12 @@ def receive(message, timeout) :
     # Activate interrupt when receive done on DIO1
     print("Set RX done, timeout, and CRC error IRQ on DIO1")
     mask = LoRa.IRQ_RX_DONE | LoRa.IRQ_TIMEOUT | LoRa.IRQ_CRC_ERR
-    LoRa._setDioIrqParams(mask, mask, LoRa.IRQ_NONE, LoRa.IRQ_NONE)
+    LoRa.setDioIrqParams(mask, mask, LoRa.IRQ_NONE, LoRa.IRQ_NONE)
     # Calculate timeout (timeout duration = timeout * 15.625 us)
     tOut = timeout * 64
     # Set RF module to RX mode to receive message
     print("Receiving LoRa packet within predefined timeout")
-    LoRa._setRx(tOut)
+    LoRa.setRx(tOut)
     # Attach irqPin to DIO1
     print(f"Attach interrupt on pin {irqPin} (irqPin)")
     global intSet
@@ -103,32 +103,32 @@ def receive(message, timeout) :
     # Clear transmit interrupt flag
     received = False
     # Clear the interrupt status
-    irqStat = []
-    LoRa._getIrqStatus(irqStat)
+    irqStat = LoRa.getIrqStatus()
     print("Clear IRQ status")
-    LoRa._clearIrqStatus(irqStat[0])
+    LoRa.clearIrqStatus(irqStat)
     GPIO.output(rxenPin, GPIO.LOW)
     # Exit function if timeout reached
-    if irqStat[0] & LoRa.IRQ_TIMEOUT :
-        return irqStat[0]
+    if irqStat & LoRa.IRQ_TIMEOUT :
+        return irqStat
     print("Packet received!")
     # Get last received length and buffer base address
     print("Get received length and buffer base address")
-    payloadLengthRx = []; rxStartBufferPointer = []
-    LoRa._getRxBufferStatus(payloadLengthRx, rxStartBufferPointer)
+    payloadLengthRx = 0; rxStartBufferPointer = 0
+    (payloadLengthRx, rxStartBufferPointer) = LoRa.getRxBufferStatus()
     # Get and display packet status
     print("Get received packet status")
-    rssiPkt = []; snrPkt = []; signalRssiPkt = []
-    LoRa._getPacketStatus(rssiPkt, snrPkt, signalRssiPkt)
-    rssi = rssiPkt[0] / -2
-    snr = snrPkt[0] / 4
-    signalRssi = signalRssiPkt[0] / -2
+    rssiPkt = 0; snrPkt = 0; signalRssiPkt = 0
+    (rssiPkt, snrPkt, signalRssiPkt) = LoRa.getPacketStatus()
+    rssi = rssiPkt / -2
+    snr = snrPkt / 4
+    signalRssi = signalRssiPkt / -2
     print(f"Packet status: RSSI = {rssi} | SNR = {snr} | signalRSSI = {signalRssi}")
     # Read message from buffer
     print("Read message from buffer")
-    LoRa._readBuffer(rxStartBufferPointer[0], message, payloadLengthRx[0])
+    buffer = LoRa.readBuffer(rxStartBufferPointer, payloadLengthRx)
+    for buf in buffer : message.append(buf)
     # Return interrupt status
-    return irqStat[0]
+    return irqStat
 
 # Seetings for LoRa communication
 setting()
