@@ -247,11 +247,6 @@ class SX126x :
     STATUS_CAD_DETECTED                    = 11
     STATUS_CAD_DONE                        = 12
 
-    # Interrupt status
-    STATUS_INT_INIT                        = 0
-    STATUS_INT_TX                          = 1
-    STATUS_INT_RX                          = 2
-
     # SPI and GPIO pin setting
     _bus = 0
     _cs = 0
@@ -263,19 +258,21 @@ class SX126x :
     _wake = -1
     _busyTimeout = 5000
     _spiSpeed = 7800000
+    _txState = gpio.LOW
+    _rxState = gpio.LOW
 
     # LoRa setting
     _dio = 1
     _modem = LORA_MODEM
     _sf = 7
-    _bw = BW_125000
+    _bw = 125000
     _cr = 5
-    _ldro = 0
+    _ldro = False
     _headerType = HEADER_EXPLICIT
     _preambleLength = 12
     _payloadLength = 32
-    _crcType = CRC_ON
-    _invertIq = IQ_STANDARD
+    _crcType = False
+    _invertIq = False
 
     # Operation properties
     _bufferIndex = 0
@@ -595,11 +592,17 @@ class SX126x :
 
         self.setLoRaPacket(self._preambleLength, self._headerType, self._payloadLength, self._crcType, invertIq)
 
-    def setSyncWord(self, sw: int) :
+    def setSyncWord(self, syncWord: int) :
+
         buf = (
-            (sw >> 8) & 0xFF,
-            sw & 0xFF
+            (syncWord >> 8) & 0xFF,
+            syncWord & 0xFF
         )
+        if syncWord <= 0xFF :
+            buf = (
+                (syncWord & 0xF0) | 0x04,
+                (syncWord << 4) | 0x04
+            )
         self.writeRegister(self.REG_LORA_SYNC_WORD_MSB, buf, 2)
 
     def setFskModulation(self, br: int, pulseShape: int, bandwidth: int, fdev: int) :
@@ -635,8 +638,10 @@ class SX126x :
         self._payloadTxRx = 0
         self.setBufferBaseAddress(self._bufferIndex, (self._bufferIndex + 0xFF) % 0xFF)
 
-        # set txen pin to low and rxen pin to high
+        # save current txen and rxen pin state and set txen pin to high and rxen pin to low
         if self._txen != -1 and self._rxen != -1 :
+            self._txState = gpio.input(self._txen)
+            self._rxState = gpio.input(self._rxen)
             gpio.output(self._txen, gpio.HIGH)
             gpio.output(self._rxen, gpio.LOW)
         self._fixLoRaBw500(self._bw)
@@ -715,8 +720,10 @@ class SX126x :
             rxTimeout = self.RX_CONTINUOUS
             self._statusWait = self.STATUS_RX_CONTINUOUS
 
-        # set txen pin to low and rxen pin to high
+        # save current txen and rxen pin state and set txen pin to low and rxen pin to high
         if self._txen != -1 and self._rxen != -1 :
+            self._txState = gpio.input(self._txen)
+            self._rxState = gpio.input(self._rxen)
             gpio.output(self._txen, gpio.LOW)
             gpio.output(self._rxen, gpio.HIGH)
 
@@ -749,8 +756,10 @@ class SX126x :
         if rxPeriod > 0x00FFFFFF : rxPeriod = 0x00FFFFFF
         if sleepPeriod > 0x00FFFFFF : sleepPeriod = 0x00FFFFFF
 
-        # set txen pin to low and rxen pin to high
+        # save current txen and rxen pin state and set txen pin to low and rxen pin to high
         if self._txen != -1 and self._rxen != -1 :
+            self._txState = gpio.input(self._txen)
+            self._rxState = gpio.input(self._rxen)
             gpio.output(self._txen, gpio.LOW)
             gpio.output(self._rxen, gpio.HIGH)
 
@@ -826,15 +835,17 @@ class SX126x :
             # immediately return when interrupt signal hit
             return False
         elif self._statusWait == self.STATUS_TX_WAIT :
-            # for transmit, calculate transmit time and set back txen pin to low
+            # for transmit, calculate transmit time and set back txen and rxen pin to previous state
             self._transmitTime = time.time() - self._transmitTime
-            if self._txen != -1 :
-                gpio.output(self._txen, gpio.LOW)
+            if self._txen != -1 and self._rxen != -1 :
+                gpio.output(self._txen, self._txState)
+                gpio.output(self._rxen, self._rxState)
         elif self._statusWait == self.STATUS_RX_WAIT :
-            # for receive, get received payload length and buffer index and set back rxen pin to low
+            # for receive, get received payload length and buffer index and set back txen and rxen pin to previous state
             (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
-            if self._rxen != -1 :
-                gpio.output(self._rxen, gpio.LOW)
+            if self._txen != -1 and self._rxen != -1 :
+                gpio.output(self._txen, self._txState)
+                gpio.output(self._rxen, self._rxState)
             self._fixRxTimeout()
         elif self._statusWait == self.STATUS_RX_CONTINUOUS :
             # for receive continuous, get received payload length and buffer index and clear IRQ status
@@ -920,8 +931,10 @@ class SX126x :
 
         # calculate transmit time
         self._transmitTime = time.time() - self._transmitTime
-        # set back txen pin to low
-        if self._txen != -1 : gpio.output(self._txen, gpio.LOW)
+        # set back txen and rxen pin to previous state
+        if self._txen != -1 and self._rxen != -1 :
+            gpio.output(self._txen, self._txState)
+            gpio.output(self._rxen, self._rxState)
         # store IRQ status
         self._statusIrq = self.getIrqStatus()
 
@@ -931,8 +944,10 @@ class SX126x :
 
     def _interruptRx(self, channel) :
 
-        # set back rxen pin to low
-        if self._rxen != -1 : gpio.output(self._rxen, gpio.LOW)
+        # set back txen and rxen pin to previous state
+        if self._txen != -1 and self._rxen != -1 :
+            gpio.output(self._txen, self._txState)
+            gpio.output(self._rxen, self._rxState)
         self._fixRxTimeout()
         # store IRQ status
         self._statusIrq = self.getIrqStatus()
