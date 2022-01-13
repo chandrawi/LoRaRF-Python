@@ -4,13 +4,13 @@
 [![GitHub stars](https://img.shields.io/github/stars/chandrawi/LoRaRF-Python)](https://github.com/chandrawi/LoRaRF-Python/stargazers)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/LoRaRF)](https://pypi.org/project/LoRaRF/)
 [![PyPI](https://img.shields.io/pypi/v/LoRaRF)](https://pypi.org/project/LoRaRF/)
-[![GitHub license](https://img.shields.io/github/license/chandrawi/LoRaRF-Python)](https://github.com/chandrawi/LoRaRF-Python/blob/main/LICENCE)
+[![GitHub license](https://img.shields.io/github/license/chandrawi/LoRaRF-Python)](https://github.com/chandrawi/LoRaRF-Python/blob/main/LICENSE)
 
-# LoRa-RF Python
+# LoRa-RF Python Library
 
 LoRa-RF Python is a library for basic transmitting and receiving data using LoRa module with Semtech SX126x series or LLCC68. The library works by interfacing SPI port and some GPIO pins under linux kernel. Support configuring frequency, modulation parameter, transmit power, receive gain and other RF parameters on both LoRa and FSK modulation also support handling transmit and receive using interrupt signal.
 
-This readme written for quick start guide. Visit this [link](https://github.com/chandrawi/LoRaRF-Python/wiki) for complete documentation.
+This readme is written for quick start guide. Visit this [link](https://github.com/chandrawi/LoRaRF-Python/wiki) for complete documentation.
 
 ## Hardware Compatibility
 
@@ -45,9 +45,9 @@ python3 setup.py bdist_wheel
 pip3 install dist/LoRaRF-1.3.0-py3-none-any.whl
 ```
 
-## Using LoRaRF Library
+## Initialization
 
-First you must include `SX126x` python module depending LoRa module you use. Then create an object from module you just import.
+To work with the library, first you must import `SX126x` python module. Then initialize the module by creating an object.
 
 ```python
 from LoRaRF import SX126x
@@ -102,7 +102,7 @@ LoRa.begin()
 
 ## Modem Configuration
 
-Before transmit or receive operation you can configure transmit power and receive gain or matching frequency, modulation parameter, packet parameter, and synchronize word with other LoRa device you want connect.
+Before transmit or receive operation you can configure transmit power and receive gain or matching frequency, modulation parameter, packet parameter, and synchronize word with other LoRa device you want communicate.
 
 ### Transmit Power
 
@@ -165,7 +165,7 @@ LoRa.wait()
 counter += 1
 ```
 
-For more detail about transmit operation, please visit this [link](https://github.com/chandrawi/LoRaRF-Python/wiki).
+For more detail about transmit operation, please visit this [link](https://github.com/chandrawi/LoRaRF-Python/wiki/Transmit-Operation).
 
 ## Receive Operation
 
@@ -182,12 +182,16 @@ while LoRa.available() > 1 :
 counter = LoRa.read()                # read single byte
 ```
 
-For more detail about receive operation, please visit this [link](https://github.com/chandrawi/LoRaRF-Python/wiki).
+For more detail about receive operation, please visit this [link](https://github.com/chandrawi/LoRaRF-Python/wiki/Receive-Operation).
 
 ## Examples
 
-See examples for [SX126x](https://github.com/chandrawi/LoRaRF-Python/tree/main/examples/SX126x), [SX127x](https://github.com/chandrawi/LoRaRF-Python/tree/main/examples/SX127x), and [simple network implementation](https://github.com/chandrawi/LoRaRF-Python/tree/main/examples/network).
+See examples for [SX126x](https://github.com/chandrawi/LoRaRF-Python/tree/main/examples/SX126x) and [simple network implementation](https://github.com/chandrawi/LoRaRF-Python/tree/main/examples/network).
 
-## Licence
+## License
 
-This library published under [MIT licence](https://github.com/chandrawi/LoRaRF-Python/blob/main/LICENSE).
+This library published under [MIT license](https://github.com/chandrawi/LoRaRF-Python/blob/main/LICENSE).
+
+## Contributor
+
+[Chandra Wijaya Sentosa](https://github.com/chandrawi) <<chandra.w.sentosa@gmail.com>>

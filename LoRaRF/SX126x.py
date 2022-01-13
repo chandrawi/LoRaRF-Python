@@ -250,8 +250,8 @@ class SX126x :
     # SPI and GPIO pin setting
     _bus = 0
     _cs = 0
-    _reset = -1
-    _busy = -1
+    _reset = 22
+    _busy = 23
     _irq = -1
     _txen = -1
     _rxen = -1
