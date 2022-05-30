@@ -40,9 +40,9 @@ class SX127x:
     REG_MODEM_CONFIG2                      = 0x1E
     REG_SYMB_TIMEOUT_LSB                   = 0x1F
     REG_PREAMBLE_MSB                       = 0x20
-    REG_PREAMBLE_LSB   		               = 0x21
+    REG_PREAMBLE_LSB                       = 0x21
     REG_PAYLOAD_LENGTH                     = 0x22
-    REG_MAX_PAYLOAD_LENGTH 		           = 0x23
+    REG_MAX_PAYLOAD_LENGTH                 = 0x23
     REG_HOP_PERIOD                         = 0x24
     REG_FIFO_RX_BYTE_ADDR                  = 0x25
     REG_MODEM_CONFIG3                      = 0x26
@@ -61,29 +61,29 @@ class SX127x:
     REG_INVERT_IQ                          = 0x33
     # Reserved                             = 0x34 
     # Reserved                             = 0x35 
-    REG_HIGH_BW_OPTIMIZE1				   = 0x36
-    REG_DETECTION_THRESHOLD				   = 0x37
+    REG_HIGH_BW_OPTIMIZE1                  = 0x36
+    REG_DETECTION_THRESHOLD                = 0x37
     # Reserved                             = 0x38 
-    REG_SYNC_WORD				           = 0x39
-    REG_HIGH_BW_OPTIMIZE2				   = 0x3A
-    REG_INVERT_IQ2         				   = 0x3B
+    REG_SYNC_WORD                          = 0x39
+    REG_HIGH_BW_OPTIMIZE2                  = 0x3A
+    REG_INVERT_IQ2                         = 0x3B
     # Reserved                             = 0x3C 
     # Reserved                             = 0x3D 
     # Reserved                             = 0x3E 
     # Reserved                             = 0x3F 
     REG_DIO_MAPPING_1                      = 0x40
     REG_DIO_MAPPING_2                      = 0x41
-    REG_VERSION	  				           = 0x42
+    REG_VERSION                            = 0x42
     # Unused                               = 0x44 
-    REG_TXCO	  				           = 0x4B
-    REG_PA_DAC	  				           = 0x4D
-    REG_FORMER_TEMP	  				       = 0x5B
+    REG_TXCO                               = 0x4B
+    REG_PA_DAC                             = 0x4D
+    REG_FORMER_TEMP                        = 0x5B
     # Unused                               = 0x5D 
-    REG_AGC_REF  	  				       = 0x61
-    REG_AGC_THRESH1  	  				   = 0x62
-    REG_AGC_THRESH2  	  				   = 0x63
-    REG_AGC_THRESH3  	  				   = 0x64
-    REG_PLL     	  				       = 0x70
+    REG_AGC_REF                            = 0x61
+    REG_AGC_THRESH1                        = 0x62
+    REG_AGC_THRESH2                        = 0x63
+    REG_AGC_THRESH3                        = 0x64
+    REG_PLL                                = 0x70
     
     # TODO all attributes here on down, refactor
     # SetSleep
