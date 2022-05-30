@@ -7,30 +7,83 @@ gpio = RPi.GPIO
 gpio.setmode(RPi.GPIO.BCM)
 gpio.setwarnings(False)
 
-class SX127x :
+class SX127x:
+    """Class for SX1276/77/78/79 LoRa chipsets from Semtech"""
 
-    # SX127X register map
+    # SX127X LoRa Mode Register Map
     REG_FIFO                               = 0x00
     REG_OPMODE                             = 0x01
+    REG_FR_MSB                             = 0x06
+    REG_FR_MID                             = 0x07
+    REG_FR_LSB                             = 0x08
+    REG_PA_CONFIG                          = 0x09
+    REG_PA_RAMP                            = 0x0A
+    REG_OCP                                = 0x0B
+    REG_LNA                                = 0x0C
     REG_FIFO_ADDR_PTR                      = 0x0D
     REG_FIFO_TX_BASE_AD                    = 0x0E
     REG_FIFO_RX_BASE_AD                    = 0x0F
-    REG_RX_NB_BYTES                        = 0x13
     REG_FIFO_RX_CURRENT_ADDR               = 0x10
+    REG_IRQ_FLAGS_MASK                     = 0x11
     REG_IRQ_FLAGS                          = 0x12
-    REG_DIO_MAPPING_1                      = 0x40
-    REG_DIO_MAPPING_2                      = 0x41
+    REG_RX_NB_BYTES                        = 0x13
+    REG_RX_HEADR_CNT_VALUE_MSB             = 0x14
+    REG_RX_HEADR_CNT_VALUE_LSB             = 0x15
+    REG_RX_PKT_CNT_VALUE_MSB               = 0x16
+    REG_RX_PKT_CNT_VALUE_LSB               = 0x17
+    REG_MODEB_STAT                         = 0x18
+    REG_PKT_SNR_VALUE                      = 0x19
+    REG_PKT_RSSI_VALUE			           = 0x1A
+    REG_RSSI_VALUE			               = 0x1B
+    REG_HOP_CHANNEL 			           = 0x1C
     REG_MODEM_CONFIG                       = 0x1D
     REG_MODEM_CONFIG2                      = 0x1E
-    REG_MODEM_CONFIG3                      = 0x26
     REG_SYMB_TIMEOUT_LSB  		           = 0x1F
-    REG_PKT_SNR_VALUE			           = 0x19
+    REG_PREAMBLE_MSB   		               = 0x20
+    REG_PREAMBLE_LSB   		               = 0x21
     REG_PAYLOAD_LENGTH                     = 0x22
-    REG_IRQ_FLAGS_MASK                     = 0x11
     REG_MAX_PAYLOAD_LENGTH 		           = 0x23
     REG_HOP_PERIOD                         = 0x24
+    REG_FIFO_RX_BYTE_ADDR                  = 0x25
+    REG_MODEM_CONFIG3                      = 0x26
+    # Reserved                             = 0x27 
+    REG_FEI_MSB                            = 0x28
+    REG_FEI_MID                            = 0x29
+    REG_FEI_LSB                            = 0x2A
+    # Reserved                             = 0x2B 
+    REG_RSSI_WIDEBAND                      = 0x2C
+    # Reserved                             = 0x2D 
+    # Reserved                             = 0x2E 
+    REG_FREQ1                              = 0x2F
+    REG_FREQ2                              = 0x30
+    REG_DETECT_OPTIMIZE                    = 0x31
+    # Reserved                             = 0x32 
+    REG_INVERT_IQ                          = 0x33
+    # Reserved                             = 0x34 
+    # Reserved                             = 0x35 
+    REG_HIGH_BW_OPTIMIZE1				   = 0x36
+    REG_DETECTION_THRESHOLD				   = 0x37
+    # Reserved                             = 0x38 
     REG_SYNC_WORD				           = 0x39
+    REG_HIGH_BW_OPTIMIZE2				   = 0x3A
+    REG_INVERT_IQ2         				   = 0x3B
+    # Reserved                             = 0x3C 
+    # Reserved                             = 0x3D 
+    # Reserved                             = 0x3E 
+    # Reserved                             = 0x3F 
+    REG_DIO_MAPPING_1                      = 0x40
+    REG_DIO_MAPPING_2                      = 0x41
     REG_VERSION	  				           = 0x42
+    # Unused                               = 0x44 
+    REG_TXCO	  				           = 0x4B
+    REG_PA_DAC	  				           = 0x4D
+    REG_FORMER_TEMP	  				       = 0x5B
+    # Unused                               = 0x5D 
+    REG_AGC_REF  	  				       = 0x61
+    REG_AGC_THRESH1  	  				   = 0x62
+    REG_AGC_THRESH2  	  				   = 0x63
+    REG_AGC_THRESH3  	  				   = 0x64
+    REG_PLL     	  				       = 0x70
     
     # TODO all attributes here on down, refactor
     # SetSleep
@@ -65,12 +118,6 @@ class SX127x :
     CAL_IMG_870                            = 0xDB
     CAL_IMG_902                            = 0xE1        #           902-928 Mhz
     CAL_IMG_928                            = 0xE9
-
-    # SetPaConfig
-    TX_POWER_SX1276                        = 0x06        # device version for TX power: SX1276
-    TX_POWER_SX1277                        = 0x07        #                              SX1277
-    TX_POWER_SX1278                        = 0x08        #                              SX1278
-    TX_POWER_SX1279                        = 0x09        #                              SX1279
 
     # SetRxTxFallbackMode
     FALLBACK_FS                            = 0x40        # after Rx/Tx go to: FS mode
