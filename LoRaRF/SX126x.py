@@ -410,7 +410,8 @@ class SX126x :
         self.setRegulatorMode(regMode)
 
     def setCurrentProtection(self, level) :
-
+        #avoid wrap-around of OCP register, which has 6bits
+        if level > 63 : level = 63
         self.writeRegister(self.REG_OCP_CONFIGURATION, (level,), 1)
 
 ### MODEM, MODULATION PARAMETER, AND PACKET PARAMETER SETUP METHODS ###
