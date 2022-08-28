@@ -5,7 +5,7 @@ class NotCompatibleError(Exception):
     pass
     
 
-class BaseLoRA(object):
+class BaseLoRa(object):
 
     def __init__(self, *args, **kwargs):
         self.spi = spidev.SpiDev()
