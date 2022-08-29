@@ -236,8 +236,34 @@ class SX127x(BaseLoRa):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def begin(self):
-        pass
+    def begin(self, bus: int = _bus, cs: int = _cs, reset: int = _reset, irq: int = _irq, txen: int = _txen, rxen: int = _rxen) ->bool:
+
+        # set spi and gpio pins
+        self.setSpi(bus, cs)
+        self.setPins(reset, irq, txen, rxen)
 
     def end(self):
         pass
+
+    def setSpi(self, bus: int, cs: int, speed: int = _spiSpeed):
+
+        self._bus = bus
+        self._cs = cs
+        self._spiSpeed = speed
+        # open spi line and set bus id, chip select, and spi speed
+        spi.open(bus, cs)
+        spi.max_speed_hz = speed
+        spi.lsbfirst = False
+        spi.mode = 0
+
+    def setPins(self, reset: int, irq: int = -1, txen: int = -1, rxen: int = -1):
+
+        self._reset = reset
+        self._irq = irq
+        self._txen = txen
+        self._rxen = rxen
+        # set pins as input or output
+        gpio.setup(reset, gpio.OUT)
+        if irq != -1 : gpio.setup(irq, gpio.IN)
+        if txen != -1 : gpio.setup(txen, gpio.OUT)
+        if rxen != -1 : gpio.setup(rxen, gpio.OUT)
