@@ -241,9 +241,29 @@ class SX127x(BaseLoRa):
         # set spi and gpio pins
         self.setSpi(bus, cs)
         self.setPins(reset, irq, txen, rxen)
+        # perform device reset
+        if not self.reset() :
+            return False
+        return True
 
     def end(self):
         pass
+
+    def reset(self) :
+
+        # put reset pin to low then wait 5 ms
+        gpio.output(self._reset, gpio.LOW)
+        time.sleep(0.001)
+        gpio.output(self._reset, gpio.HIGH)
+        time.sleep(0.005)
+        # wait until device connected, return false when device too long to respond
+        t = time.time()
+        version = 0x00
+        while version != 0x12 and version !=0x22 :
+            version = self.readRegister(self.REG_VERSION)
+            if time.time() - t > 1 :
+                return False
+        return True
 
     def setSpi(self, bus: int, cs: int, speed: int = _spiSpeed):
 
@@ -267,3 +287,27 @@ class SX127x(BaseLoRa):
         if irq != -1 : gpio.setup(irq, gpio.IN)
         if txen != -1 : gpio.setup(txen, gpio.OUT)
         if rxen != -1 : gpio.setup(rxen, gpio.OUT)
+
+    def writeBits(self, address: int, data: int, position: int, length: int):
+
+        read = self._transfer(address & 0x7F, 0x00)
+        mask = (0xFF >> (8 - length)) << position
+        write = (data << position) | (read & ~mask)
+        self._transfer(address | 0x80, write)
+        # print("read: 0x{:02X}    write: 0x{:02X}".format(read, write))
+
+    def writeRegister(self, address: int, data: int):
+
+        self._transfer(address | 0x80, data)
+
+    def readRegister(self, address: int) ->int:
+
+        return self._transfer(address & 0x7F, 0x00)
+
+    def _transfer(self, address: int, data: int) ->int:
+
+        buf = [address, data]
+        feedback = spi.xfer2(buf)
+        if (len(feedback) == 2) :
+            return int(feedback[1])
+        return -1
