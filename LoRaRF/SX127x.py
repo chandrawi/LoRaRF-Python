@@ -568,6 +568,19 @@ class SX127x(BaseLoRa):
             self.writeRegister(self.REG_FIFO, int(data[i]))
         self._payloadTxRx += length
 
+    def put(self, data) :
+
+        # prepare bytes or bytearray to be transmitted
+        if type(data) is bytes or type(data) is bytearray :
+            dataList = tuple(data)
+            length = len(dataList)
+        else : raise TypeError("input data must be bytes or bytearray")
+
+        # write data to buffer and update payload
+        for i in range(length) :
+            self.writeRegister(self.REG_FIFO, int(data[i]))
+        self._payloadTxRx += length
+
 ### RECEIVE RELATED METHODS ###
 
     def request(self, timeout: int = 0) -> bool :
@@ -642,6 +655,21 @@ class SX127x(BaseLoRa):
         # return single byte or tuple
         if single : return data[0]
         else : return data
+
+    def get(self, length: int = 1) -> bytes :
+
+        # calculate actual read length and remaining payload length
+        if self._payloadTxRx > length :
+            self._payloadTxRx -= length
+        else :
+            self._payloadTxRx = 0
+        # read data from FIFO buffer and update payload length
+        data = tuple()
+        for i in range(length) :
+            data = data + (self.readRegister(self.REG_FIFO),)
+
+        # return array of bytes
+        return bytes(data)
 
     def purge(self, length: int = 0) :
 
@@ -718,6 +746,40 @@ class SX127x(BaseLoRa):
 
         # return TX or RX wait status
         return self._statusWait
+
+    def transmitTime(self) -> float :
+
+        # get transmit time in millisecond (ms)
+        return self._transmitTime * 1000
+
+    def dataRate(self) -> float :
+
+        # get data rate last transmitted package in kbps
+        return self._payloadTxRx / self._transmitTime
+
+    def packetRssi(self) -> float :
+
+        # get relative signal strength index (RSSI) of last incoming package
+        offset = self.RSSI_OFFSET_HF
+        if self._frequency < self.BAND_THRESHOLD :
+            offset = self.RSSI_OFFSET_LF
+        if self.readRegister(self.REG_VERSION) == 0x22 :
+            offset = self.RSSI_OFFSET
+        return self.readRegister(self.REG_PKT_RSSI_VALUE) - offset
+
+    def rssi(self) -> float :
+
+        offset = self.RSSI_OFFSET_HF
+        if self._frequency < self.BAND_THRESHOLD :
+            offset = self.RSSI_OFFSET_LF
+        if self.readRegister(self.REG_VERSION) == 0x22 :
+            offset = self.RSSI_OFFSET
+        return self.readRegister(self.REG_RSSI_VALUE) - offset
+
+    def snr(self) -> float :
+
+        # get signal to noise ratio (SNR) of last incoming package
+        return self.readRegister(self.REG_PKT_SNR_VALUE) / 4.0
 
 ### SX127X DRIVER: UTILITIES ###
 
