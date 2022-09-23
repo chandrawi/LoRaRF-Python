@@ -510,6 +510,215 @@ class SX127x(BaseLoRa):
             sw = ((syncWord >> 8) & 0xF0) | (syncWord & 0x0F)
         self.writeRegister(self.REG_SYNC_WORD, sw)
 
+### TRANSMIT RELATED METHODS ###
+
+    def beginPacket(self) :
+
+        # reset TX buffer base address, FIFO address pointer and payload length
+        self.writeRegister(self.REG_FIFO_TX_BASE_ADDR, self.readRegister(self.REG_FIFO_ADDR_PTR))
+        self._payloadTxRx = 0
+
+        # save current txen and rxen pin state and set txen pin to high and rxen pin to low
+        if self._txen != -1 and self._rxen != -1 :
+            self._txState = gpio.input(self._txen)
+            self._rxState = gpio.input(self._rxen)
+            gpio.output(self._txen, gpio.HIGH)
+            gpio.output(self._rxen, gpio.LOW)
+
+    def endPacket(self, timeout: int = 0) -> bool :
+
+        # skip to enter TX mode when previous TX operation incomplete
+        if self.readRegister(self.REG_OP_MODE) & 0x07 == self.MODE_TX :
+            return False
+
+        # clear IRQ flag from last TX or RX operation
+        self.writeRegister(self.REG_IRQ_FLAGS, 0xFF)
+
+        # set packet payload length
+        self.writeRegister(self.REG_PAYLOAD_LENGTH, self._payloadTxRx)
+
+        # set status to TX wait
+        self._statusWait = self.STATUS_TX_WAIT
+        self._statusIrq = 0x00
+
+        # set device to transmit mode
+        self.writeRegister(self.REG_OP_MODE, self._modem | self.MODE_TX)
+        self._transmitTime = time.time()
+
+        # set TX done interrupt on DIO0 and attach TX interrupt handler
+        if self._irq != -1 :
+            self.writeRegister(self.REG_DIO_MAPPING_1, self.DIO0_TX_DONE)
+            gpio.remove_event_detect(self._irq)
+            gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptTx, bouncetime=10)
+        return True
+
+    def write(self, data, length: int = 0) :
+
+        # prepare data and data length to be transmitted
+        if type(data) is list or type(data) is tuple :
+            if length == 0 or length > len(data) : length = len(data)
+        elif type(data) is int or type(data) is float :
+            length = 1
+            data = (int(data),)
+        else :
+            raise TypeError("input data must be list, tuple, integer or float")
+
+        # write data to buffer and update payload
+        for i in range(length) :
+            self.writeRegister(self.REG_FIFO, int(data[i]))
+        self._payloadTxRx += length
+
+### RECEIVE RELATED METHODS ###
+
+    def request(self, timeout: int = 0) -> bool :
+
+        # skip to enter RX mode when previous RX operation incomplete
+        rxMode = self.readRegister(self.REG_OP_MODE) & 0x07
+        if rxMode == self.MODE_RX_SINGLE or rxMode == self.MODE_RX_CONTINUOUS:
+            return False
+
+        # clear IRQ flag from last TX or RX operation
+        self.writeRegister(self.REG_IRQ_FLAGS, 0xFF)
+
+        # save current txen and rxen pin state and set txen pin to low and rxen pin to high
+        if self._txen != -1 and self._rxen != -1 :
+            self._txState = gpio.input(self._txen)
+            self._rxState = gpio.input(self._rxen)
+            gpio.output(self._txen, gpio.LOW)
+            gpio.output(self._rxen, gpio.HIGH)
+
+        # set status to RX wait
+        self._statusWait = self.STATUS_RX_WAIT
+        self._statusIrq = 0x00
+
+        # select RX mode to RX continuous mode for RX single and continuos operation
+        rxMode = self.MODE_RX_CONTINUOUS
+        if timeout == self.RX_CONTINUOUS :
+            self._statusWait = self.STATUS_RX_CONTINUOUS
+        elif timeout > 0 :
+            # Select RX mode to single mode for RX operation with timeout
+            rxMode = self.MODE_RX_SINGLE
+            # calculate and set symbol timeout
+            symbTimeout = (timeout * self._bw / 1000) >> self._sf   # devided by 1000, ms to s
+            self.writeBits(self.REG_MODEM_CONFIG_2, (symbTimeout >> 8) & 0x03, 0, 2)
+            self.writeRegister(self.REG_SYMB_TIMEOUT_LSB, symbTimeout & 0xFF)
+
+        # set device to receive mode
+        self.writeRegister(self.REG_OP_MODE, self._modem | rxMode)
+
+        # set RX done interrupt on DIO0 and attach RX interrupt handler
+        if self._irq != -1 :
+            self.writeRegister(self.REG_DIO_MAPPING_1, self.DIO0_RX_DONE)
+            gpio.remove_event_detect(self._irq)
+            if timeout == self.RX_CONTINUOUS :
+                gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRxContinuous, bouncetime=10)
+            else :
+                gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=10)
+        return True
+
+    def available(self) :
+
+        # get size of package still available to read
+        return self._payloadTxRx
+
+    def read(self, length: int = 0) :
+
+        # single or multiple bytes read
+        single = False
+        if length == 0 :
+            length = 1
+            single = True
+
+        # calculate actual read length and remaining payload length
+        if self._payloadTxRx > length :
+            self._payloadTxRx -= length
+        else :
+            self._payloadTxRx = 0
+        # read multiple bytes of received package in FIFO buffer
+        data = tuple()
+        for i in range(length) :
+            data = data + (self.readRegister(self.REG_FIFO),)
+
+        # return single byte or tuple
+        if single : return data[0]
+        else : return data
+
+    def purge(self, length: int = 0) :
+
+        # subtract or reset received payload length
+        if (self._payloadTxRx > length) and length :
+            self._payloadTxRx = self._payloadTxRx - length
+        else :
+            self._payloadTxRx = 0
+
+### WAIT, OPERATION STATUS, AND PACKET STATUS METHODS ###
+
+    def wait(self, timeout: int = 0) -> bool :
+
+        # immediately return when currently not waiting transmit or receive process
+        if self._statusIrq : return True
+
+        # wait transmit or receive process finish by checking interrupt status or IRQ status
+        irqFlag = 0x00
+        irqFlagMask = self.IRQ_RX_DONE | self.IRQ_RX_TIMEOUT | self.IRQ_CRC_ERR
+        if self._statusWait == self.STATUS_TX_WAIT :
+            irqFlagMask = self.IRQ_TX_DONE
+        t = time.time()
+        while not (irqFlag & irqFlagMask) and self._statusIrq == 0x00 :
+            # only check IRQ status register for non interrupt operation
+            if self._irq == -1 : irqFlag = self.readRegister(self.REG_IRQ_FLAGS)
+            # return when timeout reached
+            if time.time() - t > timeout and timeout > 0 : return False
+
+        if self._statusIrq :
+            # immediately return when interrupt signal hit
+            return True
+
+        elif self._statusWait == self.STATUS_TX_WAIT :
+            # calculate transmit time and set back txen and rxen pin to previous state
+            self._transmitTime = time.time() - self._transmitTime
+            if self._txen != -1 and self._rxen != -1 :
+                gpio.output(self._txen, self._txState)
+                gpio.output(self._rxen, self._rxState)
+
+        elif self._statusWait == self.STATUS_RX_WAIT :
+            # terminate receive mode by setting mode to standby
+            self.standby()
+            # set pointer to RX buffer base address and get packet payload length
+            self.writeRegister(self.REG_FIFO_ADDR_PTR, self.readRegister(self.REG_FIFO_RX_CURRENT_ADDR))
+            self._payloadTxRx = self.readRegister(self.REG_RX_NB_BYTES)
+            # set back txen and rxen pin to previous state
+            if self._txen != -1 and self._rxen != -1 :
+                gpio.output(self._txen, self._txState)
+                gpio.output(self._rxen, self._rxState)
+
+        elif self._statusWait == self.STATUS_RX_CONTINUOUS :
+            # set pointer to RX buffer base address and get packet payload length
+            self.writeRegister(self.REG_FIFO_ADDR_PTR, self.readRegister(self.REG_FIFO_RX_CURRENT_ADDR))
+            self._payloadTxRx = self.readRegister(self.REG_RX_NB_BYTES)
+            # clear IRQ flag
+            self.writeRegister(self.REG_IRQ_FLAGS, 0xFF)
+
+        # store IRQ status
+        self._statusIrq = irqFlag
+        return True
+
+    def status(self) -> int :
+
+        # set back status IRQ for RX continuous operation
+        statusIrq = self._statusIrq
+        if self._statusWait == self.STATUS_RX_CONTINUOUS :
+            self._statusIrq = 0x0000
+
+        # get status for transmit and receive operation based on status IRQ
+        if statusIrq & self.IRQ_RX_TIMEOUT : return self.STATUS_RX_TIMEOUT
+        elif statusIrq & self.IRQ_CRC_ERR : return self.STATUS_CRC_ERR
+        elif statusIrq & self.IRQ_TX_DONE : return self.STATUS_TX_DONE
+        elif statusIrq & self.IRQ_RX_DONE : return self.STATUS_RX_DONE
+
+        # return TX or RX wait status
+        return self._statusWait
+
 ### SX127X DRIVER: UTILITIES ###
 
     def writeBits(self, address: int, data: int, position: int, length: int):
