@@ -1,3 +1,4 @@
+from pickletools import optimize
 from .base import BaseLoRa
 import spidev
 import RPi.GPIO
@@ -203,15 +204,15 @@ class SX127x(BaseLoRa):
     _irq = -1
     _txen = -1
     _rxen = -1
-    _wake = -1
     _busyTimeout = 5000
-    _spiSpeed = 7800000
+    _spiSpeed = 16000000
     _txState = gpio.LOW
     _rxState = gpio.LOW
 
     # LoRa setting
     _dio = 1
     _modem = LORA_MODEM
+    _frequency = 915000000
     _sf = 7
     _bw = 125000
     _cr = 5
@@ -223,7 +224,6 @@ class SX127x(BaseLoRa):
     _invertIq = False
 
     # Operation properties
-    _bufferIndex = 0
     _payloadTxRx = 32
     _statusWait = STATUS_DEFAULT
     _statusIrq = STATUS_DEFAULT
@@ -236,18 +236,30 @@ class SX127x(BaseLoRa):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+### COMMON OPERATIONAL METHODS ###
+
     def begin(self, bus: int = _bus, cs: int = _cs, reset: int = _reset, irq: int = _irq, txen: int = _txen, rxen: int = _rxen) ->bool:
 
         # set spi and gpio pins
         self.setSpi(bus, cs)
         self.setPins(reset, irq, txen, rxen)
+
         # perform device reset
         if not self.reset() :
             return False
+
+        # set modem to LoRa
+        self.setModem(self.LORA_MODEM)
+        # set tx power and rx gain
+        self.setTxPower(17, self.TX_POWER_PA_BOOST)
+        self.setRxGain(self.RX_GAIN_BOOSTED, self.RX_GAIN_AUTO)
         return True
 
     def end(self):
-        pass
+
+        self.sleep()
+        spi.close()
+        gpio.cleanup()
 
     def reset(self) :
 
@@ -264,6 +276,22 @@ class SX127x(BaseLoRa):
             if time.time() - t > 1 :
                 return False
         return True
+
+    def sleep(self) :
+
+        # put device in sleep mode
+        self.writeRegister(self.REG_OP_MODE, self._modem | self.MODE_SLEEP)
+
+    def wake(self) :
+
+        # wake device by put in standby mode
+        self.writeRegister(self.REG_OP_MODE, self._modem | self.MODE_STDBY)
+
+    def standby(self) :
+
+        self.writeRegister(self.REG_OP_MODE, self._modem | self.MODE_STDBY)
+
+### HARDWARE CONFIGURATION METHODS ###
 
     def setSpi(self, bus: int, cs: int, speed: int = _spiSpeed):
 
@@ -288,13 +316,208 @@ class SX127x(BaseLoRa):
         if txen != -1 : gpio.setup(txen, gpio.OUT)
         if rxen != -1 : gpio.setup(rxen, gpio.OUT)
 
+    def setCurrentProtection(self, current: int) :
+
+        # calculate ocp trim
+        ocpTrim = 27
+        if current <= 120 :
+            ocpTrim = int((current - 45) / 5)
+        elif current <= 240 :
+            ocpTrim = int((current + 30) / 10)
+        # set over current protection config
+        self.writeRegister(self.REG_OCP, 0x20 | ocpTrim)
+
+    def setOscillator(self, option: int) :
+        
+        cfg = self.OSC_CRYSTAL
+        if option == self.OSC_TCXO :
+            cfg = self.OSC_TCXO
+        self.writeRegister(self.REG_TCXO, cfg)
+
+### MODEM, MODULATION PARAMETER, AND PACKET PARAMETER SETUP METHODS ###
+
+    def setModem(self, modem: int) :
+
+        if modem == self.LORA_MODEM :
+            self._modem = self.LONG_RANGE_MODE
+        elif modem == self.FSK_MODEM :
+            self._modem = self.MODULATION_FSK
+        else :
+            self._modem = self.MODULATION_OOK
+        self.sleep()
+        self.writeRegister(self.REG_OP_MODE, self._modem | self.MODE_STDBY)
+
+    def setFrequency(self, frequency: int) :
+
+        self._frequency = frequency
+        # calculate frequency
+        frf = int((frequency << 19) / 32000000)
+        self.writeRegister(self.REG_FRF_MSB, (frf >> 16) & 0xFF)
+        self.writeRegister(self.REG_FRF_MID, (frf >> 8) & 0xFF)
+        self.writeRegister(self.REG_FRF_LSB, frf & 0xFF)
+
+    def setTxPower(self, txPower: int, paPin: int) :
+
+        # maximum TX power is 20 dBm and 14 dBm for RFO pin
+        if txPower > 20 : txPower = 20
+        elif txPower > 14 and paPin == self.TX_POWER_RFO : txPower = 14
+
+        paConfig = 0x00
+        outputPower = 0x00
+        if paPin == self.TX_POWER_RFO :
+            # txPower = Pmax - (15 - outputPower)
+            if txPower == 14 :
+                # max power (Pmax) 14.4 dBm
+                paConfig = 0x60
+                outputPower = txPower + 1
+            else :
+                # max power (Pmax) 13.2 dBm
+                paConfig = 0x40
+                outputPower = txPower + 2
+        else :
+            paConfig = 0xC0
+            paDac = 0x04
+            # txPower = 17 - (15 - outputPower)
+            if txPower > 17 :
+                outputPower = 15
+                paDac = 0x07
+                self.setCurrentProtection(100)  # max current 100 mA
+            else :
+                if txPower < 2 : txPower = 2
+                outputPower = txPower - 2
+                self.setCurrentProtection(140)  # max current 140 mA
+            # enable or disable +20 dBm option on PA_BOOST pin
+            self.writeRegister(self.REG_PA_DAC, paDac)
+
+        # set PA config
+        self.writeRegister(self.REG_PA_CONFIG, paConfig | outputPower)
+
+    def setRxGain(self, boost: int, level: int) :
+
+        # valid RX gain level 0 - 6 (0 -> AGC on)
+        if level > 6 : level = 6
+        # boost LNA and automatic gain controller config
+        LnaBoostHf = 0x00
+        if boost : LnaBoostHf = 0x03
+        AgcOn = 0x00
+        if level == self.RX_GAIN_AUTO : AgcOn = 0x01
+
+        # set gain and boost LNA config
+        self.writeRegister(self.REG_LNA, LnaBoostHf | (level << 5))
+        # enable or disable AGC
+        self.writeBits(self.REG_MODEM_CONFIG_3, AgcOn, 2, 1)
+
+    def setLoRaModulation(self, sf: int, bw: int, cr: int, ldro: bool = False) :
+
+        self.setSpreadingFactor(sf)
+        self.setBandwidth(bw)
+        self.setCodeRate(cr)
+        self.setLdroEnable(ldro)
+
+    def setLoRaPacket(self, headerType: int, preambleLength: int, payloadLength: int, crcType: bool = False, invertIq: bool = False) :
+
+        self.setHeaderType(headerType)
+        self.setPreambleLength(preambleLength)
+        self.setPayloadLength(payloadLength)
+        self.setCrcEnable(crcType)
+        # self.setInvertIq(invertIq)
+
+    def setSpreadingFactor(self, sf: int) :
+
+        self._sf = sf
+        # valid spreading factor is 6 - 12
+        if sf < 6 : sf = 6
+        elif sf > 12 : sf = 12
+        # set appropriate signal detection optimize and threshold
+        optimize = 0x03
+        threshold = 0x0A
+        if sf == 6 : 
+            optimize = 0x05
+            threshold = 0x0C
+        self.writeRegister(self.REG_DETECTION_OPTIMIZE, optimize)
+        self.writeRegister(self.REG_DETECTION_THRESHOLD, threshold)
+        # set spreading factor config
+        self.writeBits(self.REG_MODEM_CONFIG_2, sf, 4, 4)
+
+    def setBandwidth(self, bw: int) :
+
+        self._bw = bw
+        bwCfg = 9                       # 500 kHz
+        if bw < 9100 : bwCfg = 0        # 7.8 kHz
+        elif bw < 13000 : bwCfg = 1     # 10.4 kHz
+        elif bw < 18200 : bwCfg = 2     # 15.6 kHz
+        elif bw < 26000 : bwCfg = 3     # 20.8 kHz
+        elif bw < 36500 : bwCfg = 4     # 31.25 kHz
+        elif bw < 52100 : bwCfg = 5     # 41.7 kHz
+        elif bw < 93800 : bwCfg = 6     # 62.5 kHz
+        elif bw < 187500 : bwCfg = 7    # 125 kHz
+        elif bw < 375000 : bwCfg = 8    # 250 kHz
+        self.writeBits(self.REG_MODEM_CONFIG_1, bwCfg, 4, 4)
+
+    def setCodeRate(self, cr: int) :
+
+        # valid code rate denominator is 5 - 8
+        if cr < 5 : cr = 4
+        elif cr > 8 : cr = 8
+        crCfg = cr - 4
+        self.writeBits(self.REG_MODEM_CONFIG_1, crCfg, 1, 3)
+
+    def setLdroEnable(self, ldro: bool) :
+
+        ldroCfg = 0x00
+        if ldro : ldroCfg = 0x01
+        self.writeBits(self.REG_MODEM_CONFIG_3, ldroCfg, 3, 1)
+
+    def setHeaderType(self, headerType: int) :
+
+        self._headerType = headerType
+        headerTypeCfg = self.HEADER_EXPLICIT
+        if headerType == self.HEADER_IMPLICIT : headerTypeCfg = self.HEADER_IMPLICIT
+        self.writeBits(self.REG_MODEM_CONFIG_1, headerTypeCfg, 0, 1)
+
+    def setPreambleLength(self, preambleLength: int) :
+
+        self.writeRegister(self.REG_PREAMBLE_MSB, (preambleLength >> 8) & 0xFF)
+        self.writeRegister(self.REG_PREAMBLE_LSB, preambleLength & 0xFF)
+
+    def setPayloadLength(self, payloadLength: int) :
+
+        self._payloadLength = payloadLength
+        self.writeRegister(self.REG_PAYLOAD_LENGTH, payloadLength)
+
+    def setCrcEnable(self, crcType: bool) :
+
+        crcTypeCfg = 0x00
+        if crcType : crcTypeCfg = 0x01
+        self.writeBits(self.REG_MODEM_CONFIG_2, crcTypeCfg, 2, 1)
+
+    def setInvertIq(self, invertIq: bool) :
+
+        invertIqCfg1 = 0x00
+        invertIqCfg2 = 0x1D
+        if invertIq :
+            invertIqCfg1 = 0x01
+            invertIqCfg2 = 0x19
+        self.writeBits(self.REG_INVERTIQ, invertIqCfg1, 0, 1)
+        self.writeBits(self.REG_INVERTIQ, invertIqCfg1, 6, 1)
+        self.writeRegister(self.REG_INVERTIQ2, invertIqCfg2)
+
+    def setSyncWord(self, syncWord: int) :
+
+        sw = syncWord
+        # keep compatibility between 1 and 2 bytes synchronize word
+        if syncWord > 0xFF :
+            sw = ((syncWord >> 8) & 0xF0) | (syncWord & 0x0F)
+        self.writeRegister(self.REG_SYNC_WORD, sw)
+
+### SX127X DRIVER: UTILITIES ###
+
     def writeBits(self, address: int, data: int, position: int, length: int):
 
         read = self._transfer(address & 0x7F, 0x00)
         mask = (0xFF >> (8 - length)) << position
         write = (data << position) | (read & ~mask)
         self._transfer(address | 0x80, write)
-        # print("read: 0x{:02X}    write: 0x{:02X}".format(read, write))
 
     def writeRegister(self, address: int, data: int):
 
