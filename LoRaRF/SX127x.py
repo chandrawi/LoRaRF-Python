@@ -781,6 +781,78 @@ class SX127x(BaseLoRa):
         # get signal to noise ratio (SNR) of last incoming package
         return self.readRegister(self.REG_PKT_SNR_VALUE) / 4.0
 
+### INTERRUPT HANDLER METHODS ###
+
+    def _interruptTx(self, channel) :
+
+        # calculate transmit time
+        self._transmitTime = time.time() - self._transmitTime
+
+        # store IRQ status as TX done
+        self._statusIrq = self.IRQ_TX_DONE
+
+        # set back txen and rxen pin to previous state
+        if self._txen != -1 and self._rxen != -1 :
+            gpio.output(self._txen, self._txState)
+            gpio.output(self._rxen, self._rxState)
+
+        # call onTransmit function
+        if callable(self._onTransmit) :
+            self._onTransmit()
+
+    def _interruptRx(self, channel) :
+
+        # store IRQ status
+        self._statusIrq = self.readRegister(self.REG_IRQ_FLAGS)
+        # set IRQ status to RX done when interrupt occured before register updated
+        if not self._statusIrq & 0xF0 :
+            self._statusIrq = self.IRQ_RX_DONE
+
+        # terminate receive mode by setting mode to standby
+        self.writeBits(self.REG_OP_MODE, self.MODE_STDBY, 0, 3)
+
+        # set back txen and rxen pin to previous state
+        if self._txen != -1 and self._rxen != -1 :
+            gpio.output(self._txen, self._txState)
+            gpio.output(self._rxen, self._rxState)
+
+        # set pointer to RX buffer base address and get packet payload length
+        self.writeRegister(self.REG_FIFO_ADDR_PTR, self.readRegister(self.REG_FIFO_RX_CURRENT_ADDR))
+        self._payloadTxRx = self.readRegister(self.REG_RX_NB_BYTES)
+
+        # call onReceive function
+        if callable(self._onReceive) :
+            self._onReceive()
+
+    def _interruptRxContinuous(self, channel) :
+
+        # store IRQ status
+        self._statusIrq = self.readRegister(self.REG_IRQ_FLAGS)
+        # set IRQ status to RX done when interrupt occured before register updated
+        if not self._statusIrq & 0xF0 :
+            self._statusIrq = self.IRQ_RX_DONE
+
+        # clear IRQ flag from last TX or RX operation
+        self.writeRegister(self.REG_IRQ_FLAGS, 0xFF)
+
+        # set pointer to RX buffer base address and get packet payload length
+        self.writeRegister(self.REG_FIFO_ADDR_PTR, self.readRegister(self.REG_FIFO_RX_CURRENT_ADDR))
+        self._payloadTxRx = self.readRegister(self.REG_RX_NB_BYTES)
+
+        # call onReceive function
+        if callable(self._onReceive) :
+            self._onReceive()
+
+    def onTransmit(self, callback) :
+
+        # register onTransmit function to call every transmit done
+        self._onTransmit = callback
+
+    def onReceive(self, callback) :
+
+        # register onReceive function to call every receive done
+        self._onReceive = callback
+
 ### SX127X DRIVER: UTILITIES ###
 
     def writeBits(self, address: int, data: int, position: int, length: int):
