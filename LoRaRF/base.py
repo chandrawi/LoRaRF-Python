@@ -1,17 +1,4 @@
-import spidev
-import RPi.GPIO
-
-class NotCompatibleError(Exception):
-    pass
-    
-
-class BaseLoRa(object):
-
-    def __init__(self, *args, **kwargs):
-        self.spi = spidev.SpiDev()
-        self.gpio = RPi.GPIO
-        self.gpio.setmode(RPi.GPIO.BCM)
-        self.gpio.setwarnings(False)
+class BaseLoRa :
 
     def begin(self):
         raise NotImplementedError
@@ -22,6 +9,26 @@ class BaseLoRa(object):
     def reset(self):
         raise NotImplementedError
 
-            
-        
+    def beginPacket(self):
+        raise NotImplementedError
 
+    def endPacket(self, timeout: int)-> bool:
+        raise NotImplementedError
+
+    def write(self, data, length: int):
+        raise NotImplementedError
+
+    def request(self, timeout: int)-> bool:
+        raise NotImplementedError
+
+    def available(self):
+        raise NotImplementedError
+
+    def read(self, length: int):
+        raise NotImplementedError
+
+    def wait(self, timeout: int)-> bool:
+        raise NotImplementedError
+
+    def status(self):
+        raise NotImplementedError

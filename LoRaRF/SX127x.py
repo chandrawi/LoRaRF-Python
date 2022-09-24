@@ -1,4 +1,3 @@
-from pickletools import optimize
 from .base import BaseLoRa
 import spidev
 import RPi.GPIO
@@ -15,10 +14,6 @@ class SX127x(BaseLoRa):
     # SX127X LoRa Mode Register Map
     REG_FIFO                               = 0x00
     REG_OP_MODE                            = 0x01
-    # Unused                               = 0x02
-    # Unused                               = 0x03
-    # Unused                               = 0x04
-    # Unused                               = 0x05
     REG_FRF_MSB                            = 0x06
     REG_FRF_MID                            = 0x07
     REG_FRF_LSB                            = 0x08
@@ -52,67 +47,25 @@ class SX127x(BaseLoRa):
     REG_HOP_PERIOD                         = 0x24
     REG_FIFO_RX_BYTE_ADDR                  = 0x25
     REG_MODEM_CONFIG_3                     = 0x26
-    # Reserved                             = 0x27 
-        # Reserved                             = 0x27 
-    # Reserved                             = 0x27 
     REG_FREQ_ERROR_MSB                     = 0x28
     REG_FREQ_ERROR_MID                     = 0x29
     REG_FREQ_ERROR_LSB                     = 0x2A
-    # Reserved                             = 0x2B 
-        # Reserved                             = 0x2B 
-    # Reserved                             = 0x2B 
     REG_RSSI_WIDEBAND                      = 0x2C
-    # Reserved                             = 0x2D 
-        # Reserved                             = 0x2D 
-    # Reserved                             = 0x2D 
-    # Reserved                             = 0x2E 
-        # Reserved                             = 0x2E 
-    # Reserved                             = 0x2E 
     REG_FREQ1                              = 0x2F
     REG_FREQ2                              = 0x30
     REG_DETECTION_OPTIMIZE                 = 0x31
-    # Reserved                             = 0x32 
-        # Reserved                             = 0x32 
-    # Reserved                             = 0x32 
     REG_INVERTIQ                           = 0x33
-    # Reserved                             = 0x34 
-        # Reserved                             = 0x34 
-    # Reserved                             = 0x34 
-    # Reserved                             = 0x35 
-        # Reserved                             = 0x35 
-    # Reserved                             = 0x35 
     REG_HIGH_BW_OPTIMIZE_1                 = 0x36
     REG_DETECTION_THRESHOLD                = 0x37
-    # Reserved                             = 0x38 
-        # Reserved                             = 0x38 
-    # Reserved                             = 0x38 
     REG_SYNC_WORD                          = 0x39
     REG_HIGH_BW_OPTIMIZE_2                 = 0x3A
     REG_INVERTIQ2                          = 0x3B
-    # Reserved                             = 0x3C 
-        # Reserved                             = 0x3C 
-    # Reserved                             = 0x3C 
-    # Reserved                             = 0x3D 
-        # Reserved                             = 0x3D 
-    # Reserved                             = 0x3D 
-    # Reserved                             = 0x3E 
-        # Reserved                             = 0x3E 
-    # Reserved                             = 0x3E 
-    # Reserved                             = 0x3F 
-        # Reserved                             = 0x3F 
-    # Reserved                             = 0x3F 
     REG_DIO_MAPPING_1                      = 0x40
     REG_DIO_MAPPING_2                      = 0x41
     REG_VERSION                            = 0x42
-    # Unused                               = 0x44 
-        # Unused                               = 0x44 
-    # Unused                               = 0x44 
     REG_TCXO                               = 0x4B
     REG_PA_DAC                             = 0x4D
     REG_FORMER_TEMP                        = 0x5B
-    # Unused                               = 0x5D 
-        # Unused                               = 0x5D 
-    # Unused                               = 0x5D 
     REG_AGC_REF                            = 0x61
     REG_AGC_THRESH_1                       = 0x62
     REG_AGC_THRESH_2                       = 0x63
@@ -612,7 +565,7 @@ class SX127x(BaseLoRa):
             # Select RX mode to single mode for RX operation with timeout
             rxMode = self.MODE_RX_SINGLE
             # calculate and set symbol timeout
-            symbTimeout = (timeout * self._bw / 1000) >> self._sf   # devided by 1000, ms to s
+            symbTimeout = int(timeout * self._bw / 1000) >> self._sf   # devided by 1000, ms to s
             self.writeBits(self.REG_MODEM_CONFIG_2, (symbTimeout >> 8) & 0x03, 0, 2)
             self.writeRegister(self.REG_SYMB_TIMEOUT_LSB, symbTimeout & 0xFF)
 
