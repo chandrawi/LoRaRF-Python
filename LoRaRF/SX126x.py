@@ -257,7 +257,7 @@ class SX126x :
     _rxen = -1
     _wake = -1
     _busyTimeout = 5000
-    _spiSpeed = 16000000
+    _spiSpeed = 7800000
     _txState = gpio.LOW
     _rxState = gpio.LOW
 
@@ -822,7 +822,7 @@ class SX126x :
     def wait(self, timeout: int = 0) -> bool :
 
         # immediately return when currently not waiting transmit or receive process
-        if self._statusIrq != 0x0000 :
+        if self._statusIrq :
             return True
 
         # wait transmit or receive process finish by checking IRQ status
@@ -833,7 +833,7 @@ class SX126x :
             if self._irq == -1 : irqStat = self.getIrqStatus()
             # return when timeout reached
             if (time.time() - t) > timeout and timeout > 0 : return False
-        
+
         if self._statusIrq :
             # immediately return when interrupt signal hit
             return True
@@ -854,7 +854,7 @@ class SX126x :
             # for receive continuous, get received payload length and buffer index and clear IRQ status
             (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
             self.clearIrqStatus(0x03FF)
-        
+
         # store IRQ status
         self._statusIrq = irqStat
         return True
