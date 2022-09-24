@@ -32,10 +32,10 @@ LoRa.setCodeRate(5)                                             # Coding rate: 4
 # The explicit packet includes header contain CR, number of byte, and CRC type
 # Receiver can receive packet with different CR and packet parameters in explicit header mode
 print("Set packet parameters:\n\tExplicit header type\n\tPreamble length = 12\n\tPayload Length = 15\n\tCRC on")
-LoRa.setHeaderType(LoRa.HEADER_EXPLICIT);                       # Explicit header mode
-LoRa.setPreambleLength(12);                                     # Set preamble length to 12
-LoRa.setPayloadLength(15);                                      # Initialize payloadLength to 15
-LoRa.setCrcEnable(True);                                        # Set CRC enable
+LoRa.setHeaderType(LoRa.HEADER_EXPLICIT)                        # Explicit header mode
+LoRa.setPreambleLength(12)                                      # Set preamble length to 12
+LoRa.setPayloadLength(15)                                       # Initialize payloadLength to 15
+LoRa.setCrcEnable(True)                                         # Set CRC enable
 
 # Set syncronize word for public network (0x34)
 print("Set syncronize word to 0x34")
