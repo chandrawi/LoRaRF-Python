@@ -195,3 +195,6 @@ This library published under [MIT license](https://github.com/chandrawi/LoRaRF-P
 ## Contributor
 
 [Chandra Wijaya Sentosa](https://github.com/chandrawi) <<chandra.w.sentosa@gmail.com>>
+
+### Upcoming features...
+Base class will allow for python3-libgpiod package
