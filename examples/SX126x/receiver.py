@@ -14,38 +14,38 @@ if not LoRa.begin(busId, csId, resetPin, busyPin, irqPin, txenPin, rxenPin) :
     raise Exception("Something wrong, can't begin LoRa radio")
 
 # Configure LoRa to use TCXO with DIO3 as control
-LoRa.setDio3TcxoCtrl(LoRa.DIO3_OUTPUT_1_8, LoRa.TCXO_DELAY_10)
 print("Set RF module to use TCXO as clock reference")
+LoRa.setDio3TcxoCtrl(LoRa.DIO3_OUTPUT_1_8, LoRa.TCXO_DELAY_10)
 
 # Set frequency to 915 Mhz
-LoRa.setFrequency(915000000)
 print("Set frequency to 915 Mhz")
+LoRa.setFrequency(915000000)
 
 # Set RX gain. RX gain option are power saving gain or boosted gain
-LoRa.setRxGain(LoRa.RX_GAIN_POWER_SAVING)
 print("Set RX gain to power saving gain")
+LoRa.setRxGain(LoRa.RX_GAIN_POWER_SAVING)                       # Power saving gain
 
 # Configure modulation parameter including spreading factor (SF), bandwidth (BW), and coding rate (CR)
 # Receiver must have same SF and BW setting with transmitter to be able to receive LoRa packet
-sf = 7
-bw = 125000
-cr = 5
-LoRa.setLoRaModulation(sf, bw, cr)
 print("Set modulation parameters:\n\tSpreading factor = 7\n\tBandwidth = 125 kHz\n\tCoding rate = 4/5")
+sf = 7                                                          # LoRa spreading factor: 7
+bw = 125000                                                     # Bandwidth: 125 kHz
+cr = 5                                                          # Coding rate: 4/5
+LoRa.setLoRaModulation(sf, bw, cr)
 
 # Configure packet parameter including header type, preamble length, payload length, and CRC type
 # The explicit packet includes header contain CR, number of byte, and CRC type
 # Receiver can receive packet with different CR and packet parameters in explicit header mode
-headerType = LoRa.HEADER_EXPLICIT
-preambleLength = 12
-payloadLength = 15
-crcType = True
-LoRa.setLoRaPacket(headerType, preambleLength, payloadLength, crcType)
 print("Set packet parameters:\n\tExplicit header type\n\tPreamble length = 12\n\tPayload Length = 15\n\tCRC on")
+headerType = LoRa.HEADER_EXPLICIT                               # Explicit header mode
+preambleLength = 12                                             # Set preamble length to 12
+payloadLength = 15                                              # Initialize payloadLength to 15
+crcType = True                                                  # Set CRC enable
+LoRa.setLoRaPacket(headerType, preambleLength, payloadLength, crcType)
 
 # Set syncronize word for public network (0x3444)
-LoRa.setSyncWord(0x3444)
 print("Set syncronize word to 0x3444")
+LoRa.setSyncWord(0x3444)
 
 print("\n-- LoRa Receiver --\n")
 

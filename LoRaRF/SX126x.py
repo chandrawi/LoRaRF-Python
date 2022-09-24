@@ -8,6 +8,7 @@ gpio.setmode(RPi.GPIO.BCM)
 gpio.setwarnings(False)
 
 class SX126x :
+    """Class for SX1261/62/68 and LLCC68 LoRa chipsets from Semtech"""
 
     # SX126X register map
     REG_FSK_WHITENING_INITIAL_MSB          = 0x06B8
