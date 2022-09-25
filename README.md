@@ -1,20 +1,17 @@
 <!-- PROJECT SHIELDS -->
-[![GitHub issues](https://img.shields.io/github/issues/chandrawi/LoRaRF-Python)](https://github.com/chandrawi/LoRaRF-Python/issues)
-[![GitHub forks](https://img.shields.io/github/forks/chandrawi/LoRaRF-Python)](https://github.com/chandrawi/LoRaRF-Python/network)
-[![GitHub stars](https://img.shields.io/github/stars/chandrawi/LoRaRF-Python)](https://github.com/chandrawi/LoRaRF-Python/stargazers)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/LoRaRF)](https://pypi.org/project/LoRaRF/)
 [![PyPI](https://img.shields.io/pypi/v/LoRaRF)](https://pypi.org/project/LoRaRF/)
 [![GitHub license](https://img.shields.io/github/license/chandrawi/LoRaRF-Python)](https://github.com/chandrawi/LoRaRF-Python/blob/main/LICENSE)
 
 # LoRa-RF Python Library
 
-LoRa-RF Python is a library for basic transmitting and receiving data using LoRa module with Semtech SX126x series or LLCC68. The library works by interfacing SPI port and some GPIO pins under linux kernel. Support configuring frequency, modulation parameter, transmit power, receive gain and other RF parameters on both LoRa and FSK modulation also support handling transmit and receive using interrupt signal.
+LoRa-RF Python is a library for basic transmitting and receiving data using LoRa module with Semtech SX126x series, SX127x series, or LLCC68. The library works by interfacing SPI port and some GPIO pins under linux kernel. Support configuring frequency, modulation parameter, transmit power, receive gain and other RF parameters on both LoRa and FSK modulation also support handling transmit and receive using interrupt signal.
 
 This readme is written for quick start guide. Visit this [link](https://github.com/chandrawi/LoRaRF-Python/wiki) for complete documentation.
 
 ## Hardware Compatibility
 
-Theoritically all LoRa modules using SX126x series (SX1261, SX1262, SX1268) or LLCC68 will compatible using this library. Some LoRa module which already tested and confirmed compatible are:
+Theoritically all LoRa modules using SX126x series (SX1261, SX1262, SX1268), SX127x series (SX1272, SX1276, SX1277, SX1278, SX1279), or LLCC68 will compatible using this library. Some LoRa module which already tested and confirmed compatible are:
 * Ebyte: E22-400M22S, E22-900M22S, E22-400M30S, E22-900M30S
 
 Currently only Raspberry pi zero, zero W, 3A, 3B, 3B+, 4A, and 4B supported as host controller. Support for other single board computer will be added in the future. The Linux distro already tested using this library are:
@@ -47,11 +44,16 @@ pip3 install dist/LoRaRF-1.3.0-py3-none-any.whl
 
 ## Initialization
 
-To work with the library, first you must import `SX126x` python module. Then initialize the module by creating an object.
+To work with the library, first you must import `SX126x` or `SX127x` python module depending LoRa module you use. Then initialize the module by creating an object.
 
 ```python
+# for SX126x series or LLCC68
 from LoRaRF import SX126x
 LoRa = SX126x()
+
+# for SX127x series
+from LoRaRF import SX127x
+LoRa = SX127x()
 ```
 
 Before calling any configuration methods, doing transmit or receive operation you must call `begin()` method.
@@ -66,21 +68,21 @@ LoRa.begin()
 
 Power pins, SPI pins, `RESET`, and `BUSY` pins must be connected between host controller and LoRa module. If you want to use interrupt operation, you can connect one of `DIO1`, `DIO2`, or `DIO3` pin. You also should connect `TXEN` and `RXEN` pins if your LoRa module have those pins.
 
-The default SPI port is using bus id 0 and cs id 0. The default GPIO pins used for connecting to SX126x with Broadcom pin numbering are as follows.
+The default SPI port is using bus id 0 and cs id 0. The default GPIO pins used for connecting to SX126x and SX127x with Broadcom pin numbering are as follows.
 
-| Semtech SX126x | Raspberry Pi |
-| :------------: | :------:|
-| VCC | 3.3V |
-| GND | GND |
-| SCK | GPIO 11 |
-| MISO | GPIO 9 |
-| MOSI | GPIO 10 |
-| NSS | GPIO 8 |
-| RESET | GPIO 22 |
-| BUSY | GPIO 23|
-| DIO1 | -1 (unused) |
-| TXEN | -1 (unused) |
-| RXEN | -1 (unused) |
+| Semtech SX126x | Semtech SX127x | Raspberry Pi |
+| :------------: | :-------------:| :-----------:|
+| VCC | VCC | 3.3V |
+| GND | GND | GND |
+| SCK | SCK | GPIO 11 |
+| MISO | MISO | GPIO 9 |
+| MOSI | MOSI | GPIO 10 |
+| NSS | NSS | GPIO 8 |
+| RESET | RESET | GPIO 22 |
+| BUSY | | GPIO 23|
+| DIO1 | DIO1 | -1 (unused) |
+| TXEN | TXEN | -1 (unused) |
+| RXEN | RXEN | -1 (unused) |
 
 ### SPI Port Configuration
 
@@ -129,14 +131,14 @@ LoRa.setFrequency(915000000)
 
 ```python
 # set spreading factor 8, bandwidth 125 kHz, coding rate 4/5, and low data rate optimization off
-LoRa.setLoRaModulation(8, 125000, 5, false)
+LoRa.setLoRaModulation(8, 125000, 5, False)
 ```
 
 ### Packet Parameter
 
 ```python
 # set explicit header mode, preamble length 12, payload length 15, CRC on and no invert IQ operation
-LoRa.setLoRaPacket(LoRa.HEADER_EXPLICIT, 12, 15, true, false)
+LoRa.setLoRaPacket(LoRa.HEADER_EXPLICIT, 12, 15, true, False)
 ```
 
 ### Synchronize Word
@@ -186,11 +188,7 @@ For more detail about receive operation, please visit this [link](https://github
 
 ## Examples
 
-See examples for [SX126x](https://github.com/chandrawi/LoRaRF-Python/tree/main/examples/SX126x) and [simple network implementation](https://github.com/chandrawi/LoRaRF-Python/tree/main/examples/network).
-
-## License
-
-This library published under [MIT license](https://github.com/chandrawi/LoRaRF-Python/blob/main/LICENSE).
+See examples for [SX126x](https://github.com/chandrawi/LoRaRF-Python/tree/main/examples/SX126x), [SX127x](https://github.com/chandrawi/LoRaRF-Python/tree/main/examples/SX127x) and [simple network implementation](https://github.com/chandrawi/LoRaRF-Python/tree/main/examples/network).
 
 ## Contributor
 
