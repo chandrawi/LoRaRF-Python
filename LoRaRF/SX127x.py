@@ -8,7 +8,7 @@ gpio = RPi.GPIO
 gpio.setmode(RPi.GPIO.BCM)
 gpio.setwarnings(False)
 
-class SX127x(BaseLoRa):
+class SX127x(BaseLoRa) :
     """Class for SX1276/77/78/79 LoRa chipsets from Semtech"""
 
     # SX127X LoRa Mode Register Map
@@ -157,8 +157,7 @@ class SX127x(BaseLoRa):
     _irq = -1
     _txen = -1
     _rxen = -1
-    _busyTimeout = 5000
-    _spiSpeed = 16000000
+    _spiSpeed = 7800000
     _txState = gpio.LOW
     _rxState = gpio.LOW
 
@@ -186,12 +185,9 @@ class SX127x(BaseLoRa):
     _onTransmit = None
     _onReceive = None
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
 ### COMMON OPERATIONAL METHODS ###
 
-    def begin(self, bus: int = _bus, cs: int = _cs, reset: int = _reset, irq: int = _irq, txen: int = _txen, rxen: int = _rxen) ->bool:
+    def begin(self, bus: int = _bus, cs: int = _cs, reset: int = _reset, irq: int = _irq, txen: int = _txen, rxen: int = _rxen) -> bool :
 
         # set spi and gpio pins
         self.setSpi(bus, cs)
@@ -208,7 +204,7 @@ class SX127x(BaseLoRa):
         self.setRxGain(self.RX_GAIN_BOOSTED, self.RX_GAIN_AUTO)
         return True
 
-    def end(self):
+    def end(self) :
 
         self.sleep()
         spi.close()
@@ -246,7 +242,7 @@ class SX127x(BaseLoRa):
 
 ### HARDWARE CONFIGURATION METHODS ###
 
-    def setSpi(self, bus: int, cs: int, speed: int = _spiSpeed):
+    def setSpi(self, bus: int, cs: int, speed: int = _spiSpeed) :
 
         self._bus = bus
         self._cs = cs
@@ -257,7 +253,7 @@ class SX127x(BaseLoRa):
         spi.lsbfirst = False
         spi.mode = 0
 
-    def setPins(self, reset: int, irq: int = -1, txen: int = -1, rxen: int = -1):
+    def setPins(self, reset: int, irq: int = -1, txen: int = -1, rxen: int = -1) :
 
         self._reset = reset
         self._irq = irq
@@ -808,14 +804,14 @@ class SX127x(BaseLoRa):
 
 ### SX127X DRIVER: UTILITIES ###
 
-    def writeBits(self, address: int, data: int, position: int, length: int):
+    def writeBits(self, address: int, data: int, position: int, length: int) :
 
         read = self._transfer(address & 0x7F, 0x00)
         mask = (0xFF >> (8 - length)) << position
         write = (data << position) | (read & ~mask)
         self._transfer(address | 0x80, write)
 
-    def writeRegister(self, address: int, data: int):
+    def writeRegister(self, address: int, data: int) :
 
         self._transfer(address | 0x80, data)
 

@@ -1,3 +1,4 @@
+from .base import BaseLoRa
 import spidev
 import RPi.GPIO
 import time
@@ -7,7 +8,7 @@ gpio = RPi.GPIO
 gpio.setmode(RPi.GPIO.BCM)
 gpio.setwarnings(False)
 
-class SX126x :
+class SX126x(BaseLoRa) :
     """Class for SX1261/62/68 and LLCC68 LoRa chipsets from Semtech"""
 
     # SX126X register map
