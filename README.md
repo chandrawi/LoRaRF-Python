@@ -42,6 +42,13 @@ python3 setup.py bdist_wheel
 pip3 install dist/LoRaRF-1.3.0-py3-none-any.whl
 ```
 
+### If you run into problems installing the package, another option is creating a virtual environment
+```sh
+python -m venv lora
+source lora/bin/activate
+pip install LoRaRF
+```
+
 ## Initialization
 
 To work with the library, first you must import `SX126x` or `SX127x` python module depending LoRa module you use. Then initialize the module by creating an object.
