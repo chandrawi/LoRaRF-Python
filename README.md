@@ -39,7 +39,7 @@ To using latest update of the library, you can clone then build python package m
 git clone https://github.com/chandrawi/LoRaRF-Python.git
 cd LoRaRF-Python
 python3 setup.py bdist_wheel
-pip3 install dist/LoRaRF-1.3.0-py3-none-any.whl
+pip3 install dist/LoRaRF-1.4.0-py3-none-any.whl
 ```
 
 ## Initialization
