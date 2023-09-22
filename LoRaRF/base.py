@@ -1,3 +1,61 @@
+import spidev
+import gpiod
+from typing import Iterable
+
+
+class LoRaSpi():
+
+    SPI_SPEED = 8000000
+
+    def __init__(self, bus: int, cs: int, speed: int = SPI_SPEED):
+        self.bus = bus
+        self.cs = cs
+        self.speed = speed
+
+    def transfer(self, buf: Iterable) -> tuple:
+        spi = spidev.SpiDev()
+        spi.open(self.bus, self.cs)
+        spi.lsbfirst = False
+        spi.mode = 0
+        spi.max_speed_hz = self.speed
+        ret = spi.xfer2(buf)
+        spi.close()
+        return ret
+
+
+class LoRaGpio:
+
+    LOW = 0
+    HIGH = 1
+
+    def __init__(self, chip: int, offset: int):
+        self.chip = "gpiochip" + str(chip)
+        self.offset = offset
+
+    def output(self, value: int):
+        chip = gpiod.Chip(self.chip)
+        line = chip.get_line(self.offset)
+        try:
+            line.request(consumer="LoRaGpio", type=gpiod.LINE_REQ_DIR_OUT)
+            line.set_value(value)
+        except: return
+        finally:
+            line.release()
+            chip.close()
+
+    def input(self) -> int:
+        chip = gpiod.Chip(self.chip)
+        line = chip.get_line(self.offset)
+        try:
+            line.request(consumer="LoRaGpio", type=gpiod.LINE_REQ_DIR_IN)
+            value = line.get_value()
+        except: return -1
+        finally:
+            line.release()
+            chip.close()
+        return value
+
+
 class BaseLoRa :
 
     def begin(self):
