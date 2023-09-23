@@ -1,6 +1,7 @@
 from .base import LoRaSpi, LoRaGpio, BaseLoRa
 from typing import Optional
 import time
+from threading import Thread
 
 class SX127x(BaseLoRa) :
     """Class for SX1276/77/78/79 LoRa chipsets from Semtech"""
@@ -468,7 +469,13 @@ class SX127x(BaseLoRa) :
         self._transmitTime = time.time()
 
         # set TX done interrupt on DIO0 and attach TX interrupt handler
-
+        if self._irq != None :
+            self.writeRegister(self.REG_DIO_MAPPING_1, self.DIO0_TX_DONE)
+            if isinstance(self._monitoring, Thread):
+                self._monitoring.join()
+            to = self._irqTimeout/1000 if timeout == 0 else timeout/1000
+            self._monitoring = Thread(target=self._irq.monitor, args=(self._interruptTx, to))
+            self._monitoring.start()
         return True
 
     def write(self, data, length: int = 0) :
@@ -539,7 +546,17 @@ class SX127x(BaseLoRa) :
         self.writeRegister(self.REG_OP_MODE, self._modem | rxMode)
 
         # set RX done interrupt on DIO0 and attach RX interrupt handler
-
+        if self._irq != None :
+            self.writeRegister(self.REG_DIO_MAPPING_1, self.DIO0_RX_DONE)
+            if isinstance(self._monitoring, Thread):
+                self._monitoring.join()
+            to = self._irqTimeout/1000 if timeout == 0 else timeout/1000
+            if timeout == self.RX_CONTINUOUS:
+                self._monitoring = Thread(target=self._irq.monitor_continuous, args=(self._interruptRxContinuous, to))
+                self._monitoring.setDaemon(True)
+            else:
+                self._monitoring = Thread(target=self._irq.monitor, args=(self._interruptRx, to))
+            self._monitoring.start()
         return True
 
     def available(self) :
@@ -779,14 +796,16 @@ class SX127x(BaseLoRa) :
 
         self._transfer(address | 0x80, data)
 
-    def readRegister(self, address: int) ->int:
+    def readRegister(self, address: int) -> int :
 
         return self._transfer(address & 0x7F, 0x00)
 
-    def _transfer(self, address: int, data: int) ->int:
+    def _transfer(self, address: int, data: int) -> int :
 
         buf = [address, data]
-        feedback = self._spi.xfer2(buf)
+        self._cs.output(LoRaGpio.LOW)
+        feedback = self._spi.transfer(buf)
+        self._cs.output(LoRaGpio.HIGH)
         if (len(feedback) == 2) :
             return int(feedback[1])
         return -1

@@ -1,6 +1,7 @@
 from .base import LoRaSpi, LoRaGpio, BaseLoRa
 from typing import Optional
 import time
+from threading import Thread
 
 class SX126x(BaseLoRa) :
     """Class for SX1261/62/68 and LLCC68 LoRa chipsets from Semtech"""
@@ -639,7 +640,12 @@ class SX126x(BaseLoRa) :
         self._transmitTime = time.time()
 
         # set operation status to wait and attach TX interrupt handler
-
+        if self._irq != None :
+            if isinstance(self._monitoring, Thread):
+                self._monitoring.join()
+            to = self._irqTimeout/1000 if timeout == self.TX_SINGLE else timeout/1000
+            self._monitoring = Thread(target=self._irq.monitor, args=(self._interruptTx, to))
+            self._monitoring.start()
         return True
 
     def write(self, data, length: int = 0) :
@@ -700,7 +706,16 @@ class SX126x(BaseLoRa) :
         self.setRx(rxTimeout)
 
         # set operation status to wait and attach RX interrupt handler
-
+        if self._irq != None :
+            if isinstance(self._monitoring, Thread):
+                self._monitoring.join()
+            to = self._irqTimeout/1000 if timeout == self.RX_SINGLE else timeout/1000
+            if timeout == self.RX_CONTINUOUS:
+                self._monitoring = Thread(target=self._irq.monitor_continuous, args=(self._interruptRxContinuous, to))
+                self._monitoring.setDaemon(True)
+            else:
+                self._monitoring = Thread(target=self._irq.monitor, args=(self._interruptRx, to))
+            self._monitoring.start()
         return True
 
     def listen(self, rxPeriod: int, sleepPeriod: int) -> bool :
@@ -731,7 +746,12 @@ class SX126x(BaseLoRa) :
         self.setRxDutyCycle(rxPeriod, sleepPeriod)
 
         # set operation status to wait and attach RX interrupt handler
-
+        if self._irq != None :
+            if isinstance(self._monitoring, Thread):
+                self._monitoring.join()
+            to = self._irqTimeout/1000 if rxPeriod == self.RX_SINGLE else rxPeriod/1000
+            self._monitoring = Thread(target=self._irq.monitor, args=(self._interruptRx, to))
+            self._monitoring.start()
         return True
 
     def available(self) -> int :
