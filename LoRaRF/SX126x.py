@@ -1,12 +1,6 @@
-from .base import BaseLoRa
-import spidev
-import RPi.GPIO
+from .base import LoRaSpi, LoRaGpio, BaseLoRa
+from typing import Optional
 import time
-
-spi = spidev.SpiDev()
-gpio = RPi.GPIO
-gpio.setmode(RPi.GPIO.BCM)
-gpio.setwarnings(False)
 
 class SX126x(BaseLoRa) :
     """Class for SX1261/62/68 and LLCC68 LoRa chipsets from Semtech"""
@@ -250,18 +244,10 @@ class SX126x(BaseLoRa) :
     STATUS_CAD_DONE                        = 12
 
     # SPI and GPIO pin setting
-    _bus = 0
-    _cs = 0
-    _reset = 22
-    _busy = 23
-    _irq = -1
-    _txen = -1
-    _rxen = -1
-    _wake = -1
     _busyTimeout = 5000
-    _spiSpeed = 7800000
-    _txState = gpio.LOW
-    _rxState = gpio.LOW
+    _irqTimeout = 10000
+    _txState = LoRaGpio.LOW
+    _rxState = LoRaGpio.LOW
 
     # LoRa setting
     _dio = 1
@@ -277,6 +263,7 @@ class SX126x(BaseLoRa) :
     _invertIq = False
 
     # Operation properties
+    _monitoring = None
     _bufferIndex = 0
     _payloadTxRx = 32
     _statusWait = STATUS_DEFAULT
@@ -287,13 +274,20 @@ class SX126x(BaseLoRa) :
     _onTransmit = None
     _onReceive = None
 
+    def __init__(self, spi: LoRaSpi, cs: LoRaGpio, reset: LoRaGpio, busy: LoRaGpio, irq: Optional[LoRaGpio]=None, txen: Optional[LoRaGpio]=None, rxen: Optional[LoRaGpio]=None):
+
+        self._spi = spi
+        self._cs = cs
+        self._reset = reset
+        self._busy = busy
+        self._irq = irq
+        self._txen = txen
+        self._rxen = rxen
+
 ### COMMON OPERATIONAL METHODS ###
 
-    def begin(self, bus: int = _bus, cs: int = _cs, reset: int = _reset, busy: int = _busy, irq: int = _irq, txen: int = _txen, rxen: int = _rxen, wake: int = _wake) :
+    def begin(self) -> bool :
 
-        # set spi and gpio pins
-        self.setSpi(bus, cs)
-        self.setPins(reset, busy, irq, txen, rxen, wake)
         # perform device reset
         self.reset()
 
@@ -308,15 +302,13 @@ class SX126x(BaseLoRa) :
     def end(self) :
 
         self.sleep(self.SLEEP_COLD_START)
-        spi.close()
-        gpio.cleanup()
 
     def reset(self) -> bool :
 
         # put reset pin to low then wait busy pin to low
-        gpio.output(self._reset, gpio.LOW)
+        self._reset.output(LoRaGpio.LOW)
         time.sleep(0.001)
-        gpio.output(self._reset, gpio.HIGH)
+        self._reset.output(LoRaGpio.HIGH)
         return not self.busyCheck()
 
     def sleep(self, option = SLEEP_WARM_START) :
@@ -329,10 +321,8 @@ class SX126x(BaseLoRa) :
     def wake(self) :
 
         # wake device by set wake pin (cs pin) to low before spi transaction and put device in standby mode
-        if (self._wake != -1) :
-            gpio.setup(self._wake, gpio.OUT)
-            gpio.output(self._wake, gpio.LOW)
-            time.sleep(0.0005)
+        self._cs.output(LoRaGpio.LOW)
+        time.sleep(0.0005)
         self.setStandby(self.STANDBY_RC)
         self._fixResistanceAntenna()
 
@@ -344,7 +334,7 @@ class SX126x(BaseLoRa) :
 
         # wait for busy pin to LOW or timeout reached
         t = time.time()
-        while gpio.input(self._busy) == gpio.HIGH :
+        while self._busy.input() == LoRaGpio.HIGH :
             if (time.time() - t) > (timeout / 1000) : return True
         return False
 
@@ -358,31 +348,9 @@ class SX126x(BaseLoRa) :
 
 ### HARDWARE CONFIGURATION METHODS ###
 
-    def setSpi(self, bus: int, cs: int, speed: int = _spiSpeed) :
+    def setSpiSpeed(self, speed: int) :
 
-        self._bus = bus
-        self._cs = cs
-        self._spiSpeed = speed
-        # open spi line and set bus id, chip select, and spi speed
-        spi.open(bus, cs)
-        spi.max_speed_hz = speed
-        spi.lsbfirst = False
-        spi.mode = 0
-
-    def setPins(self, reset: int, busy: int, irq: int = -1, txen: int = -1, rxen: int = -1, wake: int = -1) :
-
-        self._reset = reset
-        self._busy = busy
-        self._irq = irq
-        self._txen = txen
-        self._rxen = rxen
-        self._wake = wake
-        # set pins as input or output
-        gpio.setup(reset, gpio.OUT)
-        gpio.setup(busy, gpio.IN)
-        if irq != -1 : gpio.setup(irq, gpio.IN)
-        if txen != -1 : gpio.setup(txen, gpio.OUT)
-        if rxen != -1 : gpio.setup(rxen, gpio.OUT)
+        self._spi.speed = speed
 
     def setRfIrqPin(self, dioPinSelect: int) :
 
@@ -642,11 +610,11 @@ class SX126x(BaseLoRa) :
         self.setBufferBaseAddress(self._bufferIndex, (self._bufferIndex + 0xFF) % 0xFF)
 
         # save current txen and rxen pin state and set txen pin to high and rxen pin to low
-        if self._txen != -1 and self._rxen != -1 :
-            self._txState = gpio.input(self._txen)
-            self._rxState = gpio.input(self._rxen)
-            gpio.output(self._txen, gpio.HIGH)
-            gpio.output(self._rxen, gpio.LOW)
+        if self._txen != None and self._rxen != None :
+            self._txState = self._txen.input()
+            self._rxState = self._rxen.input()
+            self._txen.output(LoRaGpio.HIGH)
+            self._rxen.output(LoRaGpio.LOW)
         self._fixLoRaBw500(self._bw)
 
     def endPacket(self, timeout: int = TX_SINGLE) -> bool :
@@ -671,9 +639,7 @@ class SX126x(BaseLoRa) :
         self._transmitTime = time.time()
 
         # set operation status to wait and attach TX interrupt handler
-        if self._irq != -1 :
-            gpio.remove_event_detect(self._irq)
-            gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptTx, bouncetime=10)
+
         return True
 
     def write(self, data, length: int = 0) :
@@ -724,22 +690,17 @@ class SX126x(BaseLoRa) :
             self._statusWait = self.STATUS_RX_CONTINUOUS
 
         # save current txen and rxen pin state and set txen pin to low and rxen pin to high
-        if self._txen != -1 and self._rxen != -1 :
-            self._txState = gpio.input(self._txen)
-            self._rxState = gpio.input(self._rxen)
-            gpio.output(self._txen, gpio.LOW)
-            gpio.output(self._rxen, gpio.HIGH)
+        if self._txen != None and self._rxen != None :
+            self._txState = self._txen.input()
+            self._rxState = self._rxen.input()
+            self._txen.output(LoRaGpio.LOW)
+            self._rxen.output(LoRaGpio.HIGH)
 
         # set device to receive mode with configured timeout, single, or continuous operation
         self.setRx(rxTimeout)
 
         # set operation status to wait and attach RX interrupt handler
-        if self._irq != -1 :
-            gpio.remove_event_detect(self._irq)
-            if timeout == self.RX_CONTINUOUS :
-                gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRxContinuous, bouncetime=10)
-            else :
-                gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=10)
+
         return True
 
     def listen(self, rxPeriod: int, sleepPeriod: int) -> bool :
@@ -760,19 +721,17 @@ class SX126x(BaseLoRa) :
         if sleepPeriod > 0x00FFFFFF : sleepPeriod = 0x00FFFFFF
 
         # save current txen and rxen pin state and set txen pin to low and rxen pin to high
-        if self._txen != -1 and self._rxen != -1 :
-            self._txState = gpio.input(self._txen)
-            self._rxState = gpio.input(self._rxen)
-            gpio.output(self._txen, gpio.LOW)
-            gpio.output(self._rxen, gpio.HIGH)
+        if self._txen != None and self._rxen != None :
+            self._txState = self._txen.input()
+            self._rxState = self._rxen.input()
+            self._txen.output(LoRaGpio.LOW)
+            self._rxen.output(LoRaGpio.HIGH)
 
         # set device to receive mode with configured receive and sleep period
         self.setRxDutyCycle(rxPeriod, sleepPeriod)
 
         # set operation status to wait and attach RX interrupt handler
-        if self._irq != -1 :
-            gpio.remove_event_detect(self._irq)
-            gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=10)
+
         return True
 
     def available(self) -> int :
@@ -832,7 +791,7 @@ class SX126x(BaseLoRa) :
         t = time.time()
         while irqStat == 0x0000 and self._statusIrq == 0x0000 :
             # only check IRQ status register for non interrupt operation
-            if self._irq == -1 : irqStat = self.getIrqStatus()
+            if self._irq == None : irqStat = self.getIrqStatus()
             # return when timeout reached
             if (time.time() - t) > timeout and timeout > 0 : return False
 
@@ -842,15 +801,15 @@ class SX126x(BaseLoRa) :
         elif self._statusWait == self.STATUS_TX_WAIT :
             # for transmit, calculate transmit time and set back txen and rxen pin to previous state
             self._transmitTime = time.time() - self._transmitTime
-            if self._txen != -1 and self._rxen != -1 :
-                gpio.output(self._txen, self._txState)
-                gpio.output(self._rxen, self._rxState)
+            if self._txen != None and self._rxen != None :
+                self._txen.output(self._txState)
+                self._rxen.output(self._rxState)
         elif self._statusWait == self.STATUS_RX_WAIT :
             # for receive, get received payload length and buffer index and set back txen and rxen pin to previous state
             (self._payloadTxRx, self._bufferIndex) = self.getRxBufferStatus()
-            if self._txen != -1 and self._rxen != -1 :
-                gpio.output(self._txen, self._txState)
-                gpio.output(self._rxen, self._rxState)
+            if self._txen != None and self._rxen != None :
+                self._txen.output(self._txState)
+                self._rxen.output(self._rxState)
             self._fixRxTimeout()
         elif self._statusWait == self.STATUS_RX_CONTINUOUS :
             # for receive continuous, get received payload length and buffer index and clear IRQ status
@@ -932,14 +891,14 @@ class SX126x(BaseLoRa) :
         else : dio1Mask = irqMask
         self.setDioIrqParams(irqMask, dio1Mask, dio2Mask, dio3Mask)
 
-    def _interruptTx(self, channel) :
+    def _interruptTx(self) :
 
         # calculate transmit time
         self._transmitTime = time.time() - self._transmitTime
         # set back txen and rxen pin to previous state
-        if self._txen != -1 and self._rxen != -1 :
-            gpio.output(self._txen, self._txState)
-            gpio.output(self._rxen, self._rxState)
+        if self._txen != None and self._rxen != None :
+            self._txen.output(self._txState)
+            self._rxen.output(self._rxState)
         # store IRQ status
         self._statusIrq = self.getIrqStatus()
 
@@ -947,12 +906,12 @@ class SX126x(BaseLoRa) :
         if callable(self._onTransmit) :
             self._onTransmit()
 
-    def _interruptRx(self, channel) :
+    def _interruptRx(self) :
 
         # set back txen and rxen pin to previous state
-        if self._txen != -1 and self._rxen != -1 :
-            gpio.output(self._txen, self._txState)
-            gpio.output(self._rxen, self._rxState)
+        if self._txen != None and self._rxen != None :
+            self._txen.output(self._txState)
+            self._rxen.output(self._rxState)
         self._fixRxTimeout()
         # store IRQ status
         self._statusIrq = self.getIrqStatus()
@@ -963,7 +922,7 @@ class SX126x(BaseLoRa) :
         if callable(self._onReceive) :
             self._onReceive()
 
-    def _interruptRxContinuous(self, channel) :
+    def _interruptRxContinuous(self) :
 
         # store IRQ status
         self._statusIrq = self.getIrqStatus()
@@ -1274,12 +1233,16 @@ class SX126x(BaseLoRa) :
         if self.busyCheck() : return
         buf = [opCode]
         for i in range(nBytes) : buf.append(data[i])
-        spi.xfer2(buf)
+        self._cs.output(LoRaGpio.LOW)
+        self._spi.transfer(buf)
+        self._cs.output(LoRaGpio.HIGH)
 
     def _readBytes(self, opCode: int, nBytes: int, address: tuple = (), nAddress: int = 0) -> tuple :
         if self.busyCheck() : return ()
         buf = [opCode]
         for i in range(nAddress) : buf.append(address[i])
         for i in range(nBytes) : buf.append(0x00)
-        feedback = spi.xfer2(buf)
+        self._cs.output(LoRaGpio.LOW)
+        feedback = self._spi.transfer(buf)
+        self._cs.output(LoRaGpio.HIGH)
         return tuple(feedback[nAddress+1:])

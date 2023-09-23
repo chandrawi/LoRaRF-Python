@@ -1,12 +1,6 @@
-from .base import BaseLoRa
-import spidev
-import RPi.GPIO
+from .base import LoRaSpi, LoRaGpio, BaseLoRa
+from typing import Optional
 import time
-
-spi = spidev.SpiDev()
-gpio = RPi.GPIO
-gpio.setmode(RPi.GPIO.BCM)
-gpio.setwarnings(False)
 
 class SX127x(BaseLoRa) :
     """Class for SX1276/77/78/79 LoRa chipsets from Semtech"""
@@ -151,15 +145,9 @@ class SX127x(BaseLoRa) :
     STATUS_CAD_DONE                        = 12
 
     # SPI and GPIO pin setting
-    _bus = 0
-    _cs = 0
-    _reset = 22
-    _irq = -1
-    _txen = -1
-    _rxen = -1
-    _spiSpeed = 7800000
-    _txState = gpio.LOW
-    _rxState = gpio.LOW
+    _irqTimeout = 10000
+    _txState = LoRaGpio.LOW
+    _rxState = LoRaGpio.LOW
 
     # LoRa setting
     _dio = 1
@@ -176,6 +164,7 @@ class SX127x(BaseLoRa) :
     _invertIq = False
 
     # Operation properties
+    _monitoring = None
     _payloadTxRx = 32
     _statusWait = STATUS_DEFAULT
     _statusIrq = STATUS_DEFAULT
@@ -185,13 +174,18 @@ class SX127x(BaseLoRa) :
     _onTransmit = None
     _onReceive = None
 
+    def __init__(self, spi: LoRaSpi, cs: LoRaGpio, reset: LoRaGpio, irq: Optional[LoRaGpio]=None, txen: Optional[LoRaGpio]=None, rxen: Optional[LoRaGpio]=None):
+
+        self._spi = spi
+        self._cs = cs
+        self._reset = reset
+        self._irq = irq
+        self._txen = txen
+        self._rxen = rxen
+
 ### COMMON OPERATIONAL METHODS ###
 
-    def begin(self, bus: int = _bus, cs: int = _cs, reset: int = _reset, irq: int = _irq, txen: int = _txen, rxen: int = _rxen) -> bool :
-
-        # set spi and gpio pins
-        self.setSpi(bus, cs)
-        self.setPins(reset, irq, txen, rxen)
+    def begin(self) -> bool :
 
         # perform device reset
         if not self.reset() :
@@ -207,15 +201,13 @@ class SX127x(BaseLoRa) :
     def end(self) :
 
         self.sleep()
-        spi.close()
-        gpio.cleanup()
 
     def reset(self) :
 
         # put reset pin to low then wait 5 ms
-        gpio.output(self._reset, gpio.LOW)
+        self._reset.output(LoRaGpio.LOW)
         time.sleep(0.001)
-        gpio.output(self._reset, gpio.HIGH)
+        self._reset.output(LoRaGpio.HIGH)
         time.sleep(0.005)
         # wait until device connected, return false when device too long to respond
         t = time.time()
@@ -242,28 +234,9 @@ class SX127x(BaseLoRa) :
 
 ### HARDWARE CONFIGURATION METHODS ###
 
-    def setSpi(self, bus: int, cs: int, speed: int = _spiSpeed) :
+    def setSpiSpeed(self, speed: int) :
 
-        self._bus = bus
-        self._cs = cs
-        self._spiSpeed = speed
-        # open spi line and set bus id, chip select, and spi speed
-        spi.open(bus, cs)
-        spi.max_speed_hz = speed
-        spi.lsbfirst = False
-        spi.mode = 0
-
-    def setPins(self, reset: int, irq: int = -1, txen: int = -1, rxen: int = -1) :
-
-        self._reset = reset
-        self._irq = irq
-        self._txen = txen
-        self._rxen = rxen
-        # set pins as input or output
-        gpio.setup(reset, gpio.OUT)
-        if irq != -1 : gpio.setup(irq, gpio.IN)
-        if txen != -1 : gpio.setup(txen, gpio.OUT)
-        if rxen != -1 : gpio.setup(rxen, gpio.OUT)
+        self._spi.speed = speed
 
     def setCurrentProtection(self, current: int) :
 
@@ -468,11 +441,11 @@ class SX127x(BaseLoRa) :
         self._payloadTxRx = 0
 
         # save current txen and rxen pin state and set txen pin to high and rxen pin to low
-        if self._txen != -1 and self._rxen != -1 :
-            self._txState = gpio.input(self._txen)
-            self._rxState = gpio.input(self._rxen)
-            gpio.output(self._txen, gpio.HIGH)
-            gpio.output(self._rxen, gpio.LOW)
+        if self._txen != None and self._rxen != None :
+            self._txState = self._txen.input()
+            self._rxState = self._rxen.input()
+            self._txen.output(LoRaGpio.HIGH)
+            self._rxen.output(LoRaGpio.LOW)
 
     def endPacket(self, timeout: int = 0) -> bool :
 
@@ -495,10 +468,7 @@ class SX127x(BaseLoRa) :
         self._transmitTime = time.time()
 
         # set TX done interrupt on DIO0 and attach TX interrupt handler
-        if self._irq != -1 :
-            self.writeRegister(self.REG_DIO_MAPPING_1, self.DIO0_TX_DONE)
-            gpio.remove_event_detect(self._irq)
-            gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptTx, bouncetime=10)
+
         return True
 
     def write(self, data, length: int = 0) :
@@ -543,11 +513,11 @@ class SX127x(BaseLoRa) :
         self.writeRegister(self.REG_IRQ_FLAGS, 0xFF)
 
         # save current txen and rxen pin state and set txen pin to low and rxen pin to high
-        if self._txen != -1 and self._rxen != -1 :
-            self._txState = gpio.input(self._txen)
-            self._rxState = gpio.input(self._rxen)
-            gpio.output(self._txen, gpio.LOW)
-            gpio.output(self._rxen, gpio.HIGH)
+        if self._txen != None and self._rxen != None :
+            self._txState = self._txen.input()
+            self._rxState = self._rxen.input()
+            self._txen.output(LoRaGpio.LOW)
+            self._rxen.output(LoRaGpio.HIGH)
 
         # set status to RX wait
         self._statusWait = self.STATUS_RX_WAIT
@@ -569,13 +539,7 @@ class SX127x(BaseLoRa) :
         self.writeRegister(self.REG_OP_MODE, self._modem | rxMode)
 
         # set RX done interrupt on DIO0 and attach RX interrupt handler
-        if self._irq != -1 :
-            self.writeRegister(self.REG_DIO_MAPPING_1, self.DIO0_RX_DONE)
-            gpio.remove_event_detect(self._irq)
-            if timeout == self.RX_CONTINUOUS :
-                gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRxContinuous, bouncetime=10)
-            else :
-                gpio.add_event_detect(self._irq, gpio.RISING, callback=self._interruptRx, bouncetime=10)
+
         return True
 
     def available(self) :
@@ -643,7 +607,7 @@ class SX127x(BaseLoRa) :
         t = time.time()
         while not (irqFlag & irqFlagMask) and self._statusIrq == 0x00 :
             # only check IRQ status register for non interrupt operation
-            if self._irq == -1 : irqFlag = self.readRegister(self.REG_IRQ_FLAGS)
+            if self._irq == None : irqFlag = self.readRegister(self.REG_IRQ_FLAGS)
             # return when timeout reached
             if time.time() - t > timeout and timeout > 0 : return False
 
@@ -654,9 +618,9 @@ class SX127x(BaseLoRa) :
         elif self._statusWait == self.STATUS_TX_WAIT :
             # calculate transmit time and set back txen and rxen pin to previous state
             self._transmitTime = time.time() - self._transmitTime
-            if self._txen != -1 and self._rxen != -1 :
-                gpio.output(self._txen, self._txState)
-                gpio.output(self._rxen, self._rxState)
+            if self._txen != None and self._rxen != None :
+                self._txen.output(self._txState)
+                self._rxen.output(self._rxState)
 
         elif self._statusWait == self.STATUS_RX_WAIT :
             # terminate receive mode by setting mode to standby
@@ -665,9 +629,9 @@ class SX127x(BaseLoRa) :
             self.writeRegister(self.REG_FIFO_ADDR_PTR, self.readRegister(self.REG_FIFO_RX_CURRENT_ADDR))
             self._payloadTxRx = self.readRegister(self.REG_RX_NB_BYTES)
             # set back txen and rxen pin to previous state
-            if self._txen != -1 and self._rxen != -1 :
-                gpio.output(self._txen, self._txState)
-                gpio.output(self._rxen, self._rxState)
+            if self._txen != None and self._rxen != None :
+                self._txen.output(self._txState)
+                self._rxen.output(self._rxState)
 
         elif self._statusWait == self.STATUS_RX_CONTINUOUS :
             # set pointer to RX buffer base address and get packet payload length
@@ -732,7 +696,7 @@ class SX127x(BaseLoRa) :
 
 ### INTERRUPT HANDLER METHODS ###
 
-    def _interruptTx(self, channel) :
+    def _interruptTx(self) :
 
         # calculate transmit time
         self._transmitTime = time.time() - self._transmitTime
@@ -741,15 +705,15 @@ class SX127x(BaseLoRa) :
         self._statusIrq = self.IRQ_TX_DONE
 
         # set back txen and rxen pin to previous state
-        if self._txen != -1 and self._rxen != -1 :
-            gpio.output(self._txen, self._txState)
-            gpio.output(self._rxen, self._rxState)
+        if self._txen != None and self._rxen != None :
+            self._txen.output(self._txState)
+            self._rxen.output(self._rxState)
 
         # call onTransmit function
         if callable(self._onTransmit) :
             self._onTransmit()
 
-    def _interruptRx(self, channel) :
+    def _interruptRx(self) :
 
         # store IRQ status
         self._statusIrq = self.readRegister(self.REG_IRQ_FLAGS)
@@ -761,9 +725,9 @@ class SX127x(BaseLoRa) :
         self.writeBits(self.REG_OP_MODE, self.MODE_STDBY, 0, 3)
 
         # set back txen and rxen pin to previous state
-        if self._txen != -1 and self._rxen != -1 :
-            gpio.output(self._txen, self._txState)
-            gpio.output(self._rxen, self._rxState)
+        if self._txen != None and self._rxen != None :
+            self._txen.output(self._txState)
+            self._rxen.output(self._rxState)
 
         # set pointer to RX buffer base address and get packet payload length
         self.writeRegister(self.REG_FIFO_ADDR_PTR, self.readRegister(self.REG_FIFO_RX_CURRENT_ADDR))
@@ -773,7 +737,7 @@ class SX127x(BaseLoRa) :
         if callable(self._onReceive) :
             self._onReceive()
 
-    def _interruptRxContinuous(self, channel) :
+    def _interruptRxContinuous(self) :
 
         # store IRQ status
         self._statusIrq = self.readRegister(self.REG_IRQ_FLAGS)
@@ -822,7 +786,7 @@ class SX127x(BaseLoRa) :
     def _transfer(self, address: int, data: int) ->int:
 
         buf = [address, data]
-        feedback = spi.xfer2(buf)
+        feedback = self._spi.xfer2(buf)
         if (len(feedback) == 2) :
             return int(feedback[1])
         return -1
