@@ -1,15 +1,19 @@
 import os, sys
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
-from LoRaRF import SX126x
-import RPi.GPIO
+from LoRaRF import SX126x, LoRaSpi, LoRaGpio
 import time
+from threading import Thread
 
-busId = 1; csId = 0
-resetPin = 22; busyPin = 23; irqPin = 26; txenPin = 5; rxenPin = 25
-
-LoRa = SX126x()
-GPIO = RPi.GPIO
+# Begin LoRa radio with connected SPI bus and IO pins (cs, reset and busy) on GPIO
+spi = LoRaSpi(0, 0)
+cs = LoRaGpio(0, 8)
+reset = LoRaGpio(0, 24)
+busy = LoRaGpio(0, 23)
+irq = LoRaGpio(0, 17)
+txen = LoRaGpio(0, 5)
+rxen = LoRaGpio(0, 25)
+LoRa = SX126x(spi, cs, reset, busy)
 
 # TCXO control setting
 dio3Voltage = LoRa.DIO3_OUTPUT_1_8
@@ -41,20 +45,14 @@ sw = [0x34, 0x44]
 
 # Receive flag
 received = False
-intSet = False
 
-def checkReceiveDone(channel) :
+def checkReceiveDone() :
     global received
     received = True
 
 def settingFunction() :
 
     print("-- SETTING FUNCTION --")
-
-    # SPI and GPIO Pins setting
-    print("Setting pins")
-    LoRa.setSpi(busId, csId)
-    LoRa.setPins(resetPin, busyPin, irqPin, txenPin, rxenPin)
 
     # Reset RF module by setting resetPin to LOW and begin SPI communication
     print("Resetting RF module")
@@ -112,16 +110,13 @@ def receiveFunction(message: list, timeout: int) -> int :
     LoRa.setDioIrqParams(mask, mask, LoRa.IRQ_NONE, LoRa.IRQ_NONE)
     # Attach irqPin to DIO1
     print(f"Attach interrupt on IRQ pin")
-    global intSet
-    if not intSet :
-        GPIO.setup(irqPin, GPIO.IN)
-        GPIO.add_event_detect(irqPin, GPIO.RISING, callback=checkReceiveDone, bouncetime=100)
-        intSet = True
+    monitoring = Thread(target=irq.monitor, args=(checkReceiveDone, 0.1))
+    monitoring.start()
 
     # Set rxen and txen pin state for receiving packet
-    if txenPin != -1 and rxenPin != -1 :
-        GPIO.output(txenPin, GPIO.LOW)
-        GPIO.output(rxenPin, GPIO.HIGH)
+    if txen != None and rxen != None :
+        txen.output(LoRaGpio.LOW)
+        rxen.output(LoRaGpio.HIGH)
 
     # Calculate timeout (timeout duration = timeout * 15.625 us)
     tOut = timeout * 64
@@ -133,6 +128,7 @@ def receiveFunction(message: list, timeout: int) -> int :
     print("Wait for RX done interrupt")
     global received
     while not received : pass
+    monitoring.join()
     # Clear transmit interrupt flag
     received = False
 
@@ -140,8 +136,8 @@ def receiveFunction(message: list, timeout: int) -> int :
     irqStat = LoRa.getIrqStatus()
     print("Clear IRQ status")
     LoRa.clearIrqStatus(irqStat)
-    if rxenPin != -1 :
-        GPIO.output(rxenPin, GPIO.LOW)
+    if rxen != None :
+        rxen.output(LoRaGpio.LOW)
 
     # Exit function if timeout reached
     if irqStat & LoRa.IRQ_TIMEOUT :

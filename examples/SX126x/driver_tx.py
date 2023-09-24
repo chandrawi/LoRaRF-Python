@@ -1,15 +1,19 @@
 import os, sys
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
-from LoRaRF import SX126x
-import RPi.GPIO
+from LoRaRF import SX126x, LoRaSpi, LoRaGpio
 import time
+from threading import Thread
 
-busId = 1; csId = 0
-resetPin = 22; busyPin = 23; irqPin = 26; txenPin = 5; rxenPin = 25
-
-LoRa = SX126x()
-GPIO = RPi.GPIO
+# Begin LoRa radio with connected SPI bus and IO pins (cs, reset and busy) on GPIO
+spi = LoRaSpi(0, 0)
+cs = LoRaGpio(0, 8)
+reset = LoRaGpio(0, 24)
+busy = LoRaGpio(0, 23)
+irq = LoRaGpio(0, 17)
+txen = LoRaGpio(0, 5)
+rxen = LoRaGpio(0, 25)
+LoRa = SX126x(spi, cs, reset, busy)
 
 # TCXO control setting
 dio3Voltage = LoRa.DIO3_OUTPUT_1_8
@@ -44,20 +48,14 @@ sw = [0x34, 0x44]
 
 # Transmit flag
 transmitted = False
-intSet = False
 
-def checkTransmitDone(channel) :
+def checkTransmitDone() :
     global transmitted
     transmitted = True
 
 def settingFunction() :
 
     print("-- SETTING FUNCTION --")
-
-    # SPI and GPIO Pins setting
-    print("Setting pins")
-    LoRa.setSpi(busId, csId)
-    LoRa.setPins(resetPin, busyPin, irqPin, txenPin, rxenPin)
 
     # Reset RF module by setting resetPin to LOW and begin SPI communication
     print("Resetting RF module")
@@ -131,15 +129,12 @@ def transmitFunction(message: list, timeout: int) -> int :
 
     # Attach irqPin to DIO1
     print(f"Attach interrupt on IRQ pin")
-    global intSet
-    if not intSet :
-        GPIO.setup(irqPin, GPIO.IN)
-        GPIO.add_event_detect(irqPin, GPIO.RISING, callback=checkTransmitDone, bouncetime=100)
-        intSet = True
+    monitoring = Thread(target=irq.monitor, args=(checkTransmitDone, 0.1))
+    monitoring.start()
     # Set rxen and txen pin state for transmitting packet
-    if txenPin != -1 and rxenPin != -1 :
-        GPIO.output(txenPin, GPIO.HIGH)
-        GPIO.output(rxenPin, GPIO.LOW)
+    if txen != None and rxen != None :
+        txen.output(LoRaGpio.HIGH)
+        rxen.output(LoRaGpio.LOW)
 
     # Calculate timeout (timeout duration = timeout * 15.625 us)
     tOut = timeout * 64
@@ -153,6 +148,7 @@ def transmitFunction(message: list, timeout: int) -> int :
     print("Wait for TX done interrupt")
     global transmitted
     while not transmitted : pass
+    monitoring.join()
     tTrans = time.time() - tStart
     # Clear transmit interrupt flag
     transmitted = False
@@ -165,8 +161,8 @@ def transmitFunction(message: list, timeout: int) -> int :
     irqStat = LoRa.getIrqStatus()
     print("Clear IRQ status")
     LoRa.clearIrqStatus(irqStat)
-    if txenPin != -1 :
-        GPIO.output(txenPin, GPIO.LOW)
+    if txen != None :
+        txen.output(LoRaGpio.LOW)
 
     # Return interrupt status
     return irqStat

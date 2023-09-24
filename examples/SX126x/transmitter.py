@@ -1,16 +1,18 @@
 import os, sys
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
-from LoRaRF import SX126x
+from LoRaRF import SX126x, LoRaSpi, LoRaGpio
 import time
 
-# Begin LoRa radio and set NSS, reset, busy, IRQ, txen, and rxen pin with connected Raspberry Pi gpio pins
-# IRQ pin not used in this example (set to -1). Set txen and rxen pin to -1 if RF module doesn't have one
-busId = 1; csId = 0
-resetPin = 22; busyPin = 23; irqPin = -1; txenPin = 5; rxenPin = 25
-LoRa = SX126x()
+# Begin LoRa radio with connected SPI bus and IO pins (cs and reset) on GPIO
+# SPI is defined by bus ID and cs ID and IO pins defined by chip and offset number
+spi = LoRaSpi(0, 0)
+cs = LoRaGpio(0, 8)
+reset = LoRaGpio(0, 24)
+busy = LoRaGpio(0, 23)
+LoRa = SX126x(spi, cs, reset, busy)
 print("Begin LoRa radio")
-if not LoRa.begin(busId, csId, resetPin, busyPin, irqPin, txenPin, rxenPin) :
+if not LoRa.begin() :
     raise Exception("Something wrong, can't begin LoRa radio")
 
 # Configure LoRa to use TCXO with DIO3 as control
