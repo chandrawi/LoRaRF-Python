@@ -1,16 +1,18 @@
 import os, sys
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
-from LoRaRF import SX127x
-import RPi.GPIO
+from LoRaRF import SX127x, LoRaSpi, LoRaGpio
 import time
+from threading import Thread
 
-LoRa = SX127x()
-GPIO = RPi.GPIO
-
-# Pin setting
-busId = 1; csId = 0
-resetPin = 22; irqPin = 26; txenPin = -1; rxenPin = -1
+# Begin LoRa radio with connected SPI bus and IO pins (cs, reset and busy) on GPIO
+spi = LoRaSpi(0, 0)
+cs = LoRaGpio(0, 8)
+reset = LoRaGpio(0, 24)
+irq = LoRaGpio(0, 17)
+txen = LoRaGpio(0, 5)
+rxen = LoRaGpio(0, 25)
+LoRa = SX127x(spi, cs, reset)
 
 # RF frequency setting
 frequency = 915000000
@@ -32,8 +34,8 @@ crcEn = 1
 # SyncWord setting
 syncword = 0x12
 
+# Receive flag
 received = False
-intSet = False
 
 def checkReceiveDone(channel) :
     global received
@@ -42,11 +44,6 @@ def checkReceiveDone(channel) :
 def settingFunction() :
 
     print("-- SETTING FUNCTION --")
-
-    # SPI and Pin setting
-    print("Setting pins")
-    LoRa.setSpi(busId, csId)
-    LoRa.setPins(resetPin, irqPin, txenPin, rxenPin)
 
     # Reset RF module by setting resetPin to LOW and begin SPI communication
     LoRa.reset()
@@ -115,16 +112,13 @@ def receiveFunction(message: list) :
     LoRa.writeRegister(LoRa.REG_DIO_MAPPING_1, LoRa.DIO0_RX_DONE)
     # Attach irqPin to DIO0
     print(f"Attach interrupt on IRQ pin")
-    global intSet
-    if not intSet :
-        GPIO.setup(irqPin, GPIO.IN)
-        GPIO.add_event_detect(irqPin, GPIO.RISING, callback=checkReceiveDone, bouncetime=100)
-        intSet = True
+    monitoring = Thread(target=irq.monitor, args=(checkReceiveDone, 0.1))
+    monitoring.start()
 
     # Set txen and rxen pin state for receiving packet
-    if txenPin != -1 and rxenPin != -1 :
-        GPIO.output(txenPin, GPIO.LOW)
-        GPIO.output(rxenPin, GPIO.HIGH)
+    if txen != None and rxen != None :
+        txen.output(LoRaGpio.LOW)
+        rxen.output(LoRaGpio.HIGH)
 
     # Receive message
     print("Receiving message...")
@@ -134,6 +128,7 @@ def receiveFunction(message: list) :
     print("Wait for RX done interrupt")
     global received
     while not received : pass
+    monitoring.join()
     # Clear transmit interrupt flag
     received = False
     print("Receive done")
@@ -146,8 +141,8 @@ def receiveFunction(message: list) :
     irqStat = LoRa.readRegister(LoRa.REG_IRQ_FLAGS)
     LoRa.writeRegister(LoRa.REG_IRQ_FLAGS, 0xFF)
     print("Clear IRQ status")
-    if rxenPin != -1 :
-        GPIO.output(rxenPin, GPIO.LOW)
+    if rxen != None :
+        rxen.output(LoRaGpio.LOW)
 
     # Get FIFO address of received message and configure address pointer
     reg = LoRa.readRegister(LoRa.REG_FIFO_RX_CURRENT_ADDR)

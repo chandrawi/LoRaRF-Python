@@ -1,15 +1,18 @@
 import os, sys
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
-from LoRaRF import SX127x
+from LoRaRF import SX127x, LoRaSpi, LoRaGpio
 import time
 
-# Begin LoRa radio and set NSS, reset, busy, IRQ, txen, and rxen pin with connected Raspberry Pi gpio pins
-busId = 1; csId = 0
-resetPin = 22; irqPin = 26; txenPin = -1; rxenPin = -1
-LoRa = SX127x()
+# Begin LoRa radio with connected SPI bus and IO pins (cs and reset) on GPIO
+# SPI is defined by bus ID and cs ID and IO pins defined by chip and offset number
+spi = LoRaSpi(0, 0)
+cs = LoRaGpio(0, 8)
+reset = LoRaGpio(0, 24)
+irq = LoRaGpio(0, 17)
+LoRa = SX127x(spi, cs, reset, irq)
 print("Begin LoRa radio")
-if not LoRa.begin(busId, csId, resetPin, irqPin, txenPin, rxenPin) :
+if not LoRa.begin() :
     raise Exception("Something wrong, can't begin LoRa radio")
 
 # Set frequency to 915 Mhz
