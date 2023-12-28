@@ -104,7 +104,7 @@ def settingFunction() :
     print("Set syncWord to 0x{:02X}".format(reg))
 
 def receiveFunction(message: list) :
-    
+
     print("\n-- RECEIVE FUNCTION --")
 
     # Activate interrupt when transmit done on DIO0

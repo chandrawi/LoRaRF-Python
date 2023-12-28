@@ -102,7 +102,7 @@ def settingFunction() :
     print("Set syncWord to 0x{:02X}".format(reg))
 
 def transmitFunction(message: list) :
-    
+
     print("\n-- TRANSMIT FUNCTION --")
 
     # Configure FIFO address and address pointer for TX operation
