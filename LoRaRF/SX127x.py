@@ -251,7 +251,7 @@ class SX127x(BaseLoRa) :
         self.writeRegister(self.REG_OCP, 0x20 | ocpTrim)
 
     def setOscillator(self, option: int) :
-        
+
         cfg = self.OSC_CRYSTAL
         if option == self.OSC_TCXO :
             cfg = self.OSC_TCXO
@@ -354,7 +354,7 @@ class SX127x(BaseLoRa) :
         # set appropriate signal detection optimize and threshold
         optimize = 0x03
         threshold = 0x0A
-        if sf == 6 : 
+        if sf == 6 :
             optimize = 0x05
             threshold = 0x0C
         self.writeRegister(self.REG_DETECTION_OPTIMIZE, optimize)

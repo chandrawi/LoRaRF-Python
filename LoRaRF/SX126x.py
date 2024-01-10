@@ -229,7 +229,7 @@ class SX126x(BaseLoRa) :
     POWER_SAVING_GAIN                      = 0x94        # power saving gain register value
     BOOSTED_GAIN                           = 0x96        # boosted gain register value
 
-    # TX and RX operation status 
+    # TX and RX operation status
     STATUS_DEFAULT                         = 0           # default status (false)
     STATUS_TX_WAIT                         = 1
     STATUS_TX_TIMEOUT                      = 2
@@ -1036,7 +1036,7 @@ class SX126x(BaseLoRa) :
 
     def writeRegister(self, address: int, data: tuple, nData: int) :
         buf = (
-            (address >> 8) & 0xFF, 
+            (address >> 8) & 0xFF,
             address & 0xFF
         ) + tuple(data)
         self._writeBytes(0x0D, buf, nData+2)
@@ -1109,7 +1109,7 @@ class SX126x(BaseLoRa) :
     def setPacketType(self, packetType: int) :
         self._writeBytes(0x8A, (packetType,), 1)
 
-    def getPakcetType(self) -> int :
+    def getPacketType(self) -> int :
         buf = self._readBytes(0x11, 2)
         return buf[1]
 
@@ -1222,7 +1222,7 @@ class SX126x(BaseLoRa) :
 ### SX126X API: WORKAROUND FUNCTIONS ###
 
     def _fixLoRaBw500(self, bw: int) :
-        packetType = self.getPakcetType()
+        packetType = self.getPacketType()
         buf = self.readRegister(self.REG_TX_MODULATION, 1)
         value = buf[0] | 0x04
         if packetType == self.LORA_MODEM and bw == self.BW_500000 :
