@@ -1,6 +1,8 @@
 import spidev
 import gpiod
+from gpiod.line import Direction, Value, Edge
 from typing import Iterable
+import time
 
 
 class LoRaSpi():
@@ -25,62 +27,43 @@ class LoRaSpi():
 
 class LoRaGpio:
 
-    LOW = 0
-    HIGH = 1
+    LOW = Value.INACTIVE
+    HIGH = Value.ACTIVE
 
     def __init__(self, chip: int, offset: int):
-        self.chip = "gpiochip" + str(chip)
+        self.chip = "/dev/gpiochip" + str(chip)
         self.offset = offset
+        self.seqno = 0
 
-    def output(self, value: int):
-        chip = gpiod.Chip(self.chip)
-        line = chip.get_line(self.offset)
-        try:
-            line.request(consumer="LoRaGpio", type=gpiod.LINE_REQ_DIR_OUT)
-            line.set_value(value)
-        except: return
-        finally:
-            line.release()
-            chip.close()
+    def output(self, value: Value):
+        with gpiod.request_lines(
+            self.chip,
+            consumer="LoRaGpio",
+            config={self.offset: gpiod.LineSettings(direction=Direction.OUTPUT)}
+        ) as request:
+            request.set_value(self.offset, value)
 
-    def input(self) -> int:
-        chip = gpiod.Chip(self.chip)
-        line = chip.get_line(self.offset)
-        try:
-            line.request(consumer="LoRaGpio", type=gpiod.LINE_REQ_DIR_IN)
-            value = line.get_value()
-        except: return -1
-        finally:
-            line.release()
-            chip.close()
-        return value
+    def input(self):
+        with gpiod.request_lines(
+            self.chip,
+            consumer="LoRaGpio",
+            config={self.offset: gpiod.LineSettings(direction=Direction.INPUT)}
+        ) as request:
+            return request.get_value(self.offset)
 
     def monitor(self, callback, timeout: float):
-        seconds = int(timeout)
-        chip = gpiod.Chip(self.chip)
-        line = chip.get_line(self.offset)
-        try:
-            line.request(consumer="LoRaGpio", type=gpiod.LINE_REQ_EV_RISING_EDGE)
-            if line.event_wait(seconds, int((timeout - seconds) * 1000000000)):
-                callback()
-        except: return
-        finally:
-            line.release()
-            chip.close()
-
-    def monitor_continuous(self, callback, timeout: float):
-        seconds = int(timeout)
-        while True:
-            chip = gpiod.Chip(self.chip)
-            line = chip.get_line(self.offset)
-            try:
-                line.request(consumer="LoRaGpio", type=gpiod.LINE_REQ_EV_RISING_EDGE)
-                if line.event_wait(seconds, int((timeout - seconds) * 1000000000)):
-                    callback()
-            except: continue
-            finally:
-                line.release()
-                chip.close()
+        t = time.time()
+        with gpiod.request_lines(
+            self.chip,
+            consumer="LoRaGpio",
+            config={self.offset: gpiod.LineSettings(edge_detection=Edge.RISING)}
+        ) as request:
+            while (time.time() - t) < timeout or timeout == 0:
+                for event in request.read_edge_events():
+                    if event.line_seqno != self.seqno:
+                        self.seqno = event.line_seqno
+                        callback()
+                        return
 
 
 class BaseLoRa :

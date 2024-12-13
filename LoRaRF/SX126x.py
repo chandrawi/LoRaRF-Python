@@ -711,7 +711,7 @@ class SX126x(BaseLoRa) :
                 self._monitoring.join()
             to = self._irqTimeout/1000 if timeout == self.RX_SINGLE else timeout/1000
             if timeout == self.RX_CONTINUOUS:
-                self._monitoring = Thread(target=self._irq.monitor_continuous, args=(self._interruptRxContinuous, to))
+                self._monitoring = Thread(target=self._irq.monitor, args=(self._interruptRxContinuous, to))
                 self._monitoring.setDaemon(True)
             else:
                 self._monitoring = Thread(target=self._irq.monitor, args=(self._interruptRx, to))
